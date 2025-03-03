@@ -1,10 +1,78 @@
 import axios from 'axios';
+import apiService from './ApiService';
 
 class SonarrService {
   constructor() {
     // Try to restore from localStorage on initialization
     this.apiKey = localStorage.getItem('sonarrApiKey') || '';
     this.baseUrl = localStorage.getItem('sonarrBaseUrl') || '';
+    // Flag to determine if we should use the proxy
+    this.useProxy = true;
+  }
+  
+  /**
+   * Helper method to make API requests through proxy if enabled
+   * @param {string} endpoint - API endpoint
+   * @param {string} method - HTTP method
+   * @param {Object} data - Request body
+   * @param {Object} params - URL parameters
+   * @returns {Promise<Object>} - Response data
+   * @private
+   */
+  async _apiRequest(endpoint, method = 'GET', data = null, params = {}) {
+    if (!this.isConfigured()) {
+      throw new Error('Sonarr service is not configured. Please set baseUrl and apiKey.');
+    }
+
+    // Always include API key in params
+    const requestParams = { 
+      ...params,
+      apiKey: this.apiKey 
+    };
+    
+    const url = `${this.baseUrl}${endpoint}`;
+    
+    try {
+      if (this.useProxy) {
+        // Log attempt to connect through proxy for debugging
+        console.log(`Making ${method} request to Sonarr via proxy: ${endpoint}`);
+        
+        const response = await apiService.proxyRequest({
+          url,
+          method,
+          data,
+          params: requestParams
+        });
+        
+        // The proxy returns the data wrapped, we need to unwrap it
+        return response.data;
+      } else {
+        // Direct API request
+        console.log(`Making direct ${method} request to Sonarr: ${endpoint}`);
+        
+        const response = await axios({
+          url,
+          method,
+          data,
+          params: requestParams,
+          timeout: 10000 // 10 second timeout
+        });
+        
+        return response.data;
+      }
+    } catch (error) {
+      console.error(`Error in Sonarr API request to ${endpoint}:`, error);
+      
+      // Enhance the error with more helpful information
+      const enhancedError = {
+        ...error,
+        message: error.message || 'Unknown error',
+        endpoint,
+        url
+      };
+      
+      throw enhancedError;
+    }
   }
 
   /**
@@ -31,15 +99,8 @@ class SonarrService {
    * @returns {Promise<Array>} - List of TV shows
    */
   async getSeries() {
-    if (!this.isConfigured()) {
-      throw new Error('Sonarr service is not configured. Please set baseUrl and apiKey.');
-    }
-
     try {
-      const response = await axios.get(`${this.baseUrl}/api/v3/series`, {
-        params: { apiKey: this.apiKey }
-      });
-      return response.data;
+      return await this._apiRequest('/api/v3/series');
     } catch (error) {
       console.error('Error fetching series from Sonarr:', error);
       throw error;
@@ -52,24 +113,18 @@ class SonarrService {
    * @returns {Promise<Object|null>} - Series info if found in library, null otherwise
    */
   async findExistingSeriesByTitle(title) {
-    if (!this.isConfigured()) {
-      throw new Error('Sonarr service is not configured. Please set baseUrl and apiKey.');
-    }
-    
     try {
       // Search in the existing library
-      const libraryResponse = await axios.get(`${this.baseUrl}/api/v3/series`, {
-        params: { apiKey: this.apiKey }
-      });
+      const libraryData = await this._apiRequest('/api/v3/series');
       
       // Look for exact match first
-      let match = libraryResponse.data.find(show => 
+      let match = libraryData.find(show => 
         show.title.toLowerCase() === title.toLowerCase()
       );
       
       // If no exact match, try a more flexible search
       if (!match) {
-        match = libraryResponse.data.find(show => 
+        match = libraryData.find(show => 
           show.title.toLowerCase().includes(title.toLowerCase()) || 
           title.toLowerCase().includes(show.title.toLowerCase())
         );
@@ -88,18 +143,12 @@ class SonarrService {
    * @returns {Promise<Object|null>} - Series info if found, null otherwise
    */
   async findSeriesByTitle(title) {
-    if (!this.isConfigured()) {
-      throw new Error('Sonarr service is not configured. Please set baseUrl and apiKey.');
-    }
-    
     try {
       // First try to search in existing library
-      const libraryResponse = await axios.get(`${this.baseUrl}/api/v3/series`, {
-        params: { apiKey: this.apiKey }
-      });
+      const libraryData = await this._apiRequest('/api/v3/series');
       
       // Find closest match in library
-      const libraryMatch = libraryResponse.data.find(show => 
+      const libraryMatch = libraryData.find(show => 
         show.title.toLowerCase() === title.toLowerCase()
       );
       
@@ -109,14 +158,13 @@ class SonarrService {
       
       // If not found in library, search lookup
       // Make sure we're not adding any wildcards or special characters
-      // Sonarr's API doesn't need wildcards like ** - it does its own fuzzy matching
       const cleanTitle = title.trim();
-      const encodedTitle = encodeURIComponent(cleanTitle);
-      const lookupUrl = `${this.baseUrl}/api/v3/series/lookup?apiKey=${this.apiKey}&term=${encodedTitle}`;
-      const lookupResponse = await axios.get(lookupUrl);
       
-      if (lookupResponse.data && lookupResponse.data.length > 0) {
-        return lookupResponse.data[0];
+      // Use the API request helper with the term as a parameter
+      const lookupData = await this._apiRequest('/api/v3/series/lookup', 'GET', null, { term: cleanTitle });
+      
+      if (lookupData && lookupData.length > 0) {
+        return lookupData[0];
       }
       
       return null;
@@ -131,15 +179,9 @@ class SonarrService {
    * @returns {Promise<boolean>} - Whether the connection is successful
    */
   async testConnection() {
-    if (!this.isConfigured()) {
-      throw new Error('Sonarr service is not configured. Please set baseUrl and apiKey.');
-    }
-
     try {
-      const response = await axios.get(`${this.baseUrl}/api/v3/system/status`, {
-        params: { apiKey: this.apiKey }
-      });
-      return response.status === 200;
+      await this._apiRequest('/api/v3/system/status');
+      return true;
     } catch (error) {
       console.error('Error connecting to Sonarr:', error);
       return false;
@@ -151,15 +193,8 @@ class SonarrService {
    * @returns {Promise<Array>} - List of quality profiles
    */
   async getQualityProfiles() {
-    if (!this.isConfigured()) {
-      throw new Error('Sonarr service is not configured. Please set baseUrl and apiKey.');
-    }
-
     try {
-      const response = await axios.get(`${this.baseUrl}/api/v3/qualityprofile`, {
-        params: { apiKey: this.apiKey }
-      });
-      return response.data;
+      return await this._apiRequest('/api/v3/qualityprofile');
     } catch (error) {
       console.error('Error fetching quality profiles from Sonarr:', error);
       throw error;
@@ -171,15 +206,8 @@ class SonarrService {
    * @returns {Promise<Array>} - List of root folders
    */
   async getRootFolders() {
-    if (!this.isConfigured()) {
-      throw new Error('Sonarr service is not configured. Please set baseUrl and apiKey.');
-    }
-
     try {
-      const response = await axios.get(`${this.baseUrl}/api/v3/rootfolder`, {
-        params: { apiKey: this.apiKey }
-      });
-      return response.data;
+      return await this._apiRequest('/api/v3/rootfolder');
     } catch (error) {
       console.error('Error fetching root folders from Sonarr:', error);
       throw error;
@@ -192,21 +220,15 @@ class SonarrService {
    * @returns {Promise<Object>} - Series details from the lookup
    */
   async lookupSeries(title) {
-    if (!this.isConfigured()) {
-      throw new Error('Sonarr service is not configured. Please set baseUrl and apiKey.');
-    }
-    
     try {
       const cleanTitle = title.trim();
-      const encodedTitle = encodeURIComponent(cleanTitle);
-      const lookupUrl = `${this.baseUrl}/api/v3/series/lookup?apiKey=${this.apiKey}&term=${encodedTitle}`;
-      const lookupResponse = await axios.get(lookupUrl);
+      const lookupData = await this._apiRequest('/api/v3/series/lookup', 'GET', null, { term: cleanTitle });
       
-      if (!lookupResponse.data || lookupResponse.data.length === 0) {
+      if (!lookupData || lookupData.length === 0) {
         throw new Error(`Series "${title}" not found in Sonarr lookup.`);
       }
       
-      return lookupResponse.data[0];
+      return lookupData[0];
     } catch (error) {
       console.error(`Error looking up series "${title}" in Sonarr:`, error);
       throw error;
@@ -271,11 +293,7 @@ class SonarrService {
       };
       
       // 5. Add the series
-      const response = await axios.post(`${this.baseUrl}/api/v3/series`, payload, {
-        params: { apiKey: this.apiKey }
-      });
-      
-      return response.data;
+      return await this._apiRequest('/api/v3/series', 'POST', payload);
     } catch (error) {
       console.error(`Error adding series "${title}" to Sonarr:`, error);
       throw error;

@@ -10,6 +10,7 @@ Recommendarr is a web application that generates personalized TV show and movie 
 - **Sonarr & Radarr Integration**: Connects directly to your media servers to analyze your TV and movie collections
 - **Plex & Jellyfin Integration**: Analyzes your watch history to provide better recommendations based on what you've actually watched
 - **Flexible AI Support**: Works with OpenAI, local models (Ollama/LM Studio), or any OpenAI-compatible API
+- **API Proxy**: Routes requests through a server-side proxy to avoid CORS issues and hide API keys
 - **Customization Options**: Adjust recommendation count, model parameters, and more
 - **Dark/Light Mode**: Toggle between themes based on your preference
 - **Poster Images**: Displays media posters with fallback generation
@@ -56,12 +57,21 @@ cd recommendarr
 npm install
 ```
 
-3. Run the development server:
+3. Run the development server and API proxy:
 ```bash
-npm run serve
+npm run dev
 ```
 
 4. Visit `http://localhost:3030` in your browser.
+
+If you want to run only the frontend or API server individually:
+```bash
+# Frontend only
+npm run serve
+
+# API server only
+npm run server
+```
 
 ## 🔧 Configuration
 
@@ -211,7 +221,7 @@ For best results, try setting max tokens to 4000 and temperature between 0.6-0.8
 
 Your data never leaves your control:
 - Sonarr, Radarr, Plex, and Jellyfin API credentials are stored in your browser's localStorage
-- AI API keys are stored locally and used only for your requests
+- API requests are routed through the server-side proxy to hide your API keys from client browsers
 - Media library and watch history data is sent only to the AI service you configure
 - No analytics or tracking are included in the application
 

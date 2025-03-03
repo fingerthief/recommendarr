@@ -6,3 +6,17 @@ services:
     ports:
       - "3030:80"
     restart: unless-stopped
+    environment:
+      - VUE_APP_API_URL=http://localhost:3050/api
+    depends_on:
+      - api-server
+
+  api-server:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    container_name: recommendarr-api
+    ports:
+      - "3050:3050"
+    restart: unless-stopped
+    network_mode: "host"  # Use host networking to access local network services

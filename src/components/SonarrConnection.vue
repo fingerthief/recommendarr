@@ -12,6 +12,7 @@
           placeholder="http://localhost:8989"
           required
         />
+        <small>Enter your Sonarr URL as you would access it locally (e.g., http://localhost:8989). The proxy will handle external connections for you.</small>
       </div>
       
       <div class="form-group">
@@ -116,6 +117,8 @@ export default {
         console.error('Error auto-connecting to Sonarr:', error);
         // Clear invalid credentials
         this.clearStoredCredentials();
+        
+        // No need to show alerts during auto-connect
       } finally {
         this.connecting = false;
       }
@@ -148,6 +151,16 @@ export default {
       } catch (error) {
         console.error('Error connecting to Sonarr:', error);
         this.connectionStatus = 'error';
+        
+        // Display more helpful error message based on the error
+        if (error.message) {
+          // Show the message from the server if available
+          alert(`Connection error: ${error.message}`);
+        } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+          alert('Cannot connect to Sonarr. Please ensure the service is running and the URL is correct.');
+        } else if (error.status === 0) {
+          alert('Cannot connect to the API server. Please check your network connection.');
+        }
       } finally {
         this.connecting = false;
       }

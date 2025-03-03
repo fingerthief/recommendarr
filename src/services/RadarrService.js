@@ -1,10 +1,59 @@
 import axios from 'axios';
+import apiService from './ApiService';
 
 class RadarrService {
   constructor() {
     // Try to restore from localStorage on initialization
     this.apiKey = localStorage.getItem('radarrApiKey') || '';
     this.baseUrl = localStorage.getItem('radarrBaseUrl') || '';
+    // Flag to determine if we should use the proxy
+    this.useProxy = true;
+  }
+  
+  /**
+   * Helper method to make API requests through proxy if enabled
+   * @param {string} endpoint - API endpoint
+   * @param {string} method - HTTP method
+   * @param {Object} data - Request body
+   * @param {Object} params - URL parameters
+   * @returns {Promise<Object>} - Response data
+   * @private
+   */
+  async _apiRequest(endpoint, method = 'GET', data = null, params = {}) {
+    if (!this.isConfigured()) {
+      throw new Error('Radarr service is not configured. Please set baseUrl and apiKey.');
+    }
+
+    // Always include API key in params
+    const requestParams = { 
+      ...params,
+      apiKey: this.apiKey 
+    };
+    
+    const url = `${this.baseUrl}${endpoint}`;
+    
+    try {
+      if (this.useProxy) {
+        const response = await apiService.proxyRequest({
+          url,
+          method,
+          data,
+          params: requestParams
+        });
+        return response.data;
+      } else {
+        const response = await axios({
+          url,
+          method,
+          data,
+          params: requestParams
+        });
+        return response.data;
+      }
+    } catch (error) {
+      console.error(`Error in Radarr API request to ${endpoint}:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -35,15 +84,8 @@ class RadarrService {
    * @returns {Promise<Array>} - List of movies
    */
   async getMovies() {
-    if (!this.isConfigured()) {
-      throw new Error('Radarr service is not configured. Please set baseUrl and apiKey.');
-    }
-
     try {
-      const response = await axios.get(`${this.baseUrl}/api/v3/movie`, {
-        params: { apiKey: this.apiKey }
-      });
-      return response.data;
+      return await this._apiRequest('/api/v3/movie');
     } catch (error) {
       console.error('Error fetching movies from Radarr:', error);
       throw error;
@@ -135,15 +177,9 @@ class RadarrService {
    * @returns {Promise<boolean>} - Whether the connection is successful
    */
   async testConnection() {
-    if (!this.isConfigured()) {
-      throw new Error('Radarr service is not configured. Please set baseUrl and apiKey.');
-    }
-
     try {
-      const response = await axios.get(`${this.baseUrl}/api/v3/system/status`, {
-        params: { apiKey: this.apiKey }
-      });
-      return response.status === 200;
+      await this._apiRequest('/api/v3/system/status');
+      return true;
     } catch (error) {
       console.error('Error connecting to Radarr:', error);
       return false;

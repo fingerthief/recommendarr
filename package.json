@@ -5,11 +5,15 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "server": "node server/server.js",
+    "dev": "concurrently \"npm run serve\" \"npm run server\""
   },
   "dependencies": {
     "axios": "^1.8.1",
     "core-js": "^3.8.3",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
     "vue": "^3.2.13"
   },
   "devDependencies": {
@@ -18,6 +22,7 @@
     "@vue/cli-plugin-babel": "~5.0.0",
     "@vue/cli-plugin-eslint": "~5.0.0",
     "@vue/cli-service": "~5.0.0",
+    "concurrently": "^9.1.2",
     "eslint": "^7.32.0",
     "eslint-plugin-vue": "^8.0.3"
   },
