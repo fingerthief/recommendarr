@@ -1,5 +1,8 @@
+/* eslint-disable no-unused-vars */
 import axios from 'axios';
+/* eslint-enable no-unused-vars */
 import credentialsService from './CredentialsService';
+import apiService from './ApiService';
 
 class PlexService {
   constructor() {
@@ -60,11 +63,14 @@ class PlexService {
         }
       }
 
-      const response = await axios.get(`${this.baseUrl}/identity`, {
+      const response = await apiService.proxyRequest({
+        url: `${this.baseUrl}/identity`,
+        method: 'GET',
         params: { 
           'X-Plex-Token': this.token 
         }
       });
+      
       return response.status === 200;
     } catch (error) {
       console.error('Error connecting to Plex:', error);
@@ -108,8 +114,10 @@ class PlexService {
         params['viewedAt>'] = timestampFilter;
       }
       
-      // Get recently watched from the history endpoint
-      const response = await axios.get(`${this.baseUrl}/status/sessions/history/all`, {
+      // Get recently watched from the history endpoint through the proxy server
+      const response = await apiService.proxyRequest({
+        url: `${this.baseUrl}/status/sessions/history/all`,
+        method: 'GET',
         params: params
       });
 
@@ -259,8 +267,10 @@ class PlexService {
         params['viewedAt>'] = timestampFilter;
       }
       
-      // Get recently watched from the history endpoint
-      const response = await axios.get(`${this.baseUrl}/status/sessions/history/all`, {
+      // Get recently watched from the history endpoint through the proxy server
+      const response = await apiService.proxyRequest({
+        url: `${this.baseUrl}/status/sessions/history/all`,
+        method: 'GET',
         params: params
       });
 

@@ -23,6 +23,8 @@ services:
     restart: unless-stopped
     environment:
       - DOCKER_ENV=true
+    volumes:
+      - recommendarr_data:/app/server/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -31,3 +33,6 @@ services:
 networks:
   recommendarr-network:
     driver: bridge
+
+volumes:
+  recommendarr_data:

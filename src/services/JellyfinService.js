@@ -1,5 +1,8 @@
+/* eslint-disable no-unused-vars */
 import axios from 'axios';
+/* eslint-enable no-unused-vars */
 import credentialsService from './CredentialsService';
+import apiService from './ApiService';
 
 class JellyfinService {
   constructor() {
@@ -51,7 +54,9 @@ class JellyfinService {
     }
     
     try {
-      const response = await axios.get(`${this.baseUrl}/Users`, {
+      const response = await apiService.proxyRequest({
+        url: `${this.baseUrl}/Users`,
+        method: 'GET',
         headers: {
           'X-Emby-Token': this.apiKey
         }
@@ -82,7 +87,9 @@ class JellyfinService {
 
     try {
       // First check if we can connect to the server
-      const systemResponse = await axios.get(`${this.baseUrl}/System/Info`, {
+      const systemResponse = await apiService.proxyRequest({
+        url: `${this.baseUrl}/System/Info`,
+        method: 'GET',
         headers: {
           'X-Emby-Token': this.apiKey
         }
@@ -95,7 +102,9 @@ class JellyfinService {
       // If userId is provided, verify it's valid
       if (this.userId) {
         try {
-          const userResponse = await axios.get(`${this.baseUrl}/Users/${this.userId}`, {
+          const userResponse = await apiService.proxyRequest({
+            url: `${this.baseUrl}/Users/${this.userId}`,
+            method: 'GET',
             headers: {
               'X-Emby-Token': this.apiKey
             }
@@ -137,7 +146,9 @@ class JellyfinService {
       // Construct the URL for getting watch history for movies
       const url = `${this.baseUrl}/Users/${this.userId}/Items?IncludeItemTypes=Movie&Recursive=true&SortBy=DatePlayed&SortOrder=Descending&Filters=IsPlayed&Limit=${limit}`;
       
-      const response = await axios.get(url, {
+      const response = await apiService.proxyRequest({
+        url: url,
+        method: 'GET',
         headers: {
           'X-Emby-Token': this.apiKey
         }
@@ -182,7 +193,9 @@ class JellyfinService {
       // Construct the URL for getting watch history for TV shows
       const url = `${this.baseUrl}/Users/${this.userId}/Items?IncludeItemTypes=Series,Episode&Recursive=true&SortBy=DatePlayed&SortOrder=Descending&Filters=IsPlayed&Limit=${limit}`;
       
-      const response = await axios.get(url, {
+      const response = await apiService.proxyRequest({
+        url: url,
+        method: 'GET',
         headers: {
           'X-Emby-Token': this.apiKey
         }

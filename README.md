@@ -132,12 +132,22 @@ The easiest way to run Recommendarr:
 # Pull the image
 docker pull tannermiddleton/recommendarr:latest
 
-# Run the container with persistent data
+# Run the containers with persistent data
+# Method 1: Using docker run (basic setup)
 docker run -d \
   --name recommendarr \
   -p 3030:80 \
-  -v recommendarr_data:/app/server/data \
   tannermiddleton/recommendarr:latest
+
+docker run -d \
+  --name recommendarr-api \
+  -p 3050:3050 \
+  -v recommendarr_data:/app/server/data \
+  --env DOCKER_ENV=true \
+  tannermiddleton/recommendarr-api:latest
+
+# Method 2: Using docker-compose (recommended)
+# docker-compose up -d
 ```
 
 ### Option 2: Build and Run Locally
@@ -154,17 +164,29 @@ cd recommendarr
 # Build the Docker image
 docker build -t recommendarr:local .
 
-# Run the container with persistent data
+# Option 1: Run containers separately
 docker run -d \
   --name recommendarr \
   -p 3030:80 \
-  -v recommendarr_data:/app/server/data \
   recommendarr:local
+
+# You'll need to build the API server image separately:
+docker build -t recommendarr-api:local -f docker/api.Dockerfile .
+
+docker run -d \
+  --name recommendarr-api \
+  -p 3050:3050 \
+  -v recommendarr_data:/app/server/data \
+  --env DOCKER_ENV=true \
+  recommendarr-api:local
+
+# Option 2: Use docker-compose (recommended)
+# docker-compose up -d
 ```
 
 ### Option 3: Docker Compose
 
-The repository includes a `docker-compose.yml` file. For proper access from outside your network:
+The repository includes a `docker-compose.yml` file that sets up both the web UI and API server with persistent storage:
 
 ```bash
 # Clone the repository
@@ -177,7 +199,17 @@ cd recommendarr
 docker-compose up -d
 ```
 
-This will build the image from the local Dockerfile and start the service on port 3030.
+This will:
+1. Build both the frontend and API server images
+2. Create a named volume for secure credential storage
+3. Start the services on ports 3030 (web UI) and 3050 (API server)
+4. Properly persist your encrypted credentials between container restarts
+
+To update to a new version or after making code changes:
+```bash
+docker-compose down
+docker-compose up -d --build
+```
 
 **Note for external access**: If you plan to access Recommendarr from outside your network, make sure to:
 1. Forward ports 3030 and 3050 on your router to your server
