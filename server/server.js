@@ -1,38 +1,13 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const os = require('os');
 const dns = require('dns').promises;
 
 const app = express();
 const PORT = process.env.PORT || 3050;
 
-// Get host IP address
-function getHostIP() {
-  // Use environment variable if available (from docker-compose)
-  if (process.env.HOST_IP && process.env.HOST_IP !== 'localhost') {
-    return process.env.HOST_IP;
-  }
-  
-  // Otherwise try to determine it from network interfaces
-  const interfaces = os.networkInterfaces();
-  
-  // Check for a non-internal IPv4 address
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      // Skip internal and non-IPv4 addresses
-      if (!iface.internal && iface.family === 'IPv4') {
-        return iface.address;
-      }
-    }
-  }
-  
-  // Fallback
-  return 'localhost';
-}
-
-const HOST_IP = getHostIP();
-console.log(`Server running with host IP: ${HOST_IP}`);
+// Simple logging message for startup
+console.log(`API Server starting up in ${process.env.NODE_ENV || 'development'} mode`);
 
 // Enable CORS
 app.use(cors());
@@ -44,11 +19,7 @@ app.use(express.json());
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok',
-    hostIP: HOST_IP,
-    environment: {
-      dockerEnv: process.env.DOCKER_ENV || 'false',
-      nodeEnv: process.env.NODE_ENV || 'development'
-    }
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -124,22 +95,11 @@ app.post('/api/proxy', async (req, res) => {
   
   // In Docker environment, we need to handle local network references 
   if (process.env.DOCKER_ENV === 'true') {
-    console.log(`Original URL: ${url}`);
-    
     // Check if URL contains localhost or 127.0.0.1
     if (url.includes('localhost') || url.includes('127.0.0.1')) {
       // Replace localhost with host.docker.internal to access host machine services
       processedUrl = url.replace(/(localhost|127\.0\.0\.1)/, 'host.docker.internal');
       console.log(`Converted localhost URL to Docker-friendly format: ${processedUrl}`);
-    } 
-    // Local network IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
-    else if (/https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)\d+\.\d+/.test(url)) {
-      console.log(`Using local network IP directly: ${url}`);
-      
-      // If we have a host IP environment variable, we can use it for diagnostics
-      if (process.env.HOST_IP) {
-        console.log(`Host IP from environment: ${process.env.HOST_IP}`);
-      }
     }
   }
   

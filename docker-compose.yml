@@ -23,7 +23,6 @@ services:
     restart: unless-stopped
     environment:
       - DOCKER_ENV=true
-      - HOST_IP=${HOST_IP:-host.docker.internal}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
