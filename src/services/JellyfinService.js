@@ -1,21 +1,39 @@
 import axios from 'axios';
+import credentialsService from './CredentialsService';
 
 class JellyfinService {
   constructor() {
-    this.baseUrl = localStorage.getItem('jellyfinBaseUrl') || '';
-    this.apiKey = localStorage.getItem('jellyfinApiKey') || '';
-    this.userId = localStorage.getItem('jellyfinUserId') || '';
+    this.baseUrl = '';
+    this.apiKey = '';
+    this.userId = '';
+    // Load credentials when instantiated
+    this.loadCredentials();
   }
 
-  configure(baseUrl, apiKey, userId) {
+  /**
+   * Load credentials from server-side storage
+   */
+  async loadCredentials() {
+    const credentials = await credentialsService.getCredentials('jellyfin');
+    if (credentials) {
+      this.baseUrl = credentials.baseUrl || '';
+      this.apiKey = credentials.apiKey || '';
+      this.userId = credentials.userId || '';
+    }
+  }
+
+  async configure(baseUrl, apiKey, userId) {
     // Ensure baseUrl doesn't end with a slash
     this.baseUrl = baseUrl ? baseUrl.replace(/\/$/, '') : '';
     this.apiKey = apiKey || '';
     this.userId = userId || '';
 
-    localStorage.setItem('jellyfinBaseUrl', this.baseUrl);
-    localStorage.setItem('jellyfinApiKey', this.apiKey);
-    localStorage.setItem('jellyfinUserId', this.userId);
+    // Store credentials server-side
+    await credentialsService.storeCredentials('jellyfin', {
+      baseUrl: this.baseUrl,
+      apiKey: this.apiKey,
+      userId: this.userId
+    });
   }
 
   isConfigured() {
@@ -23,8 +41,13 @@ class JellyfinService {
   }
   
   async getUsers() {
-    if (!this.baseUrl || !this.apiKey) {
-      return [];
+    // Try to load credentials again in case they weren't ready during init
+    if (!this.isConfigured()) {
+      await this.loadCredentials();
+      
+      if (!this.isConfigured()) {
+        return [];
+      }
     }
     
     try {
@@ -48,8 +71,13 @@ class JellyfinService {
   }
 
   async testConnection() {
-    if (!this.baseUrl || !this.apiKey) {
-      return { success: false, message: 'Jellyfin URL and API key are required.' };
+    // Try to load credentials again in case they weren't ready during init
+    if (!this.isConfigured()) {
+      await this.loadCredentials();
+      
+      if (!this.isConfigured()) {
+        return { success: false, message: 'Jellyfin URL and API key are required.' };
+      }
     }
 
     try {
@@ -96,8 +124,13 @@ class JellyfinService {
   }
 
   async getRecentlyWatchedMovies(limit = 50, daysAgo = null) {
-    if (!this.baseUrl || !this.apiKey || !this.userId) {
-      return [];
+    // Try to load credentials again in case they weren't ready during init
+    if (!this.isConfigured() || !this.userId) {
+      await this.loadCredentials();
+      
+      if (!this.isConfigured() || !this.userId) {
+        return [];
+      }
     }
 
     try {
@@ -136,8 +169,13 @@ class JellyfinService {
   }
 
   async getRecentlyWatchedShows(limit = 50, daysAgo = null) {
-    if (!this.baseUrl || !this.apiKey || !this.userId) {
-      return [];
+    // Try to load credentials again in case they weren't ready during init
+    if (!this.isConfigured() || !this.userId) {
+      await this.loadCredentials();
+      
+      if (!this.isConfigured() || !this.userId) {
+        return [];
+      }
     }
 
     try {

@@ -2,12 +2,65 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const dns = require('dns').promises;
+const fs = require('fs').promises;
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3050;
 
 // Simple logging message for startup
 console.log(`API Server starting up in ${process.env.NODE_ENV || 'development'} mode`);
+
+// Create a data directory for storing user credentials
+const DATA_DIR = path.join(__dirname, 'data');
+const CREDENTIALS_FILE = path.join(DATA_DIR, 'credentials.json');
+
+// Initialize credentials storage
+let credentials = {};
+
+// Create data directory if it doesn't exist and load credentials
+async function initCredentialsStorage() {
+  try {
+    // Ensure data directory exists
+    try {
+      await fs.mkdir(DATA_DIR, { recursive: true });
+      console.log(`Created data directory: ${DATA_DIR}`);
+    } catch (err) {
+      if (err.code !== 'EEXIST') {
+        console.error('Error creating data directory:', err);
+      }
+    }
+
+    // Try to load existing credentials
+    try {
+      const data = await fs.readFile(CREDENTIALS_FILE, 'utf8');
+      credentials = JSON.parse(data);
+      console.log('Loaded existing credentials');
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        // File doesn't exist yet, initialize with empty object
+        await fs.writeFile(CREDENTIALS_FILE, JSON.stringify({}), 'utf8');
+        console.log('Created new credentials file');
+      } else {
+        console.error('Error reading credentials file:', err);
+      }
+    }
+  } catch (err) {
+    console.error('Error initializing credentials storage:', err);
+  }
+}
+
+// Save credentials to file
+async function saveCredentials() {
+  try {
+    await fs.writeFile(CREDENTIALS_FILE, JSON.stringify(credentials, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error saving credentials:', err);
+  }
+}
+
+// Initialize credentials storage on startup
+initCredentialsStorage();
 
 // Enable CORS
 app.use(cors());
@@ -21,6 +74,73 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     environment: process.env.NODE_ENV || 'development'
   });
+});
+
+// API endpoints for credentials management
+// Get all credentials (service IDs only, no secrets)
+app.get('/api/credentials', (req, res) => {
+  // Return just the service names and their existence, not the actual keys
+  const services = {};
+  for (const [service, creds] of Object.entries(credentials)) {
+    services[service] = Object.keys(creds).reduce((acc, key) => {
+      // Don't send the actual API keys or sensitive data to the client
+      acc[key] = creds[key] ? true : false;
+      return acc;
+    }, {});
+  }
+  res.json({ services });
+});
+
+// Store credentials for a service
+app.post('/api/credentials/:service', async (req, res) => {
+  const { service } = req.params;
+  const serviceCredentials = req.body;
+  
+  if (!serviceCredentials) {
+    return res.status(400).json({ error: 'No credentials provided' });
+  }
+  
+  // Initialize the service if it doesn't exist
+  if (!credentials[service]) {
+    credentials[service] = {};
+  }
+  
+  // Update the credentials
+  credentials[service] = {
+    ...credentials[service],
+    ...serviceCredentials
+  };
+  
+  // Save to file
+  await saveCredentials();
+  
+  // Return success, but don't echo back the credentials
+  res.json({ success: true, service });
+});
+
+// Retrieve credentials for a service
+app.get('/api/credentials/:service', (req, res) => {
+  const { service } = req.params;
+  
+  if (!credentials[service]) {
+    return res.status(404).json({ error: `No credentials found for ${service}` });
+  }
+  
+  res.json(credentials[service]);
+});
+
+// Delete credentials for a service
+app.delete('/api/credentials/:service', async (req, res) => {
+  const { service } = req.params;
+  
+  if (!credentials[service]) {
+    return res.status(404).json({ error: `No credentials found for ${service}` });
+  }
+  
+  delete credentials[service];
+  await saveCredentials();
+  
+  res.json({ success: true, message: `Credentials for ${service} deleted` });
 });
 
 // Generic proxy endpoint for all services

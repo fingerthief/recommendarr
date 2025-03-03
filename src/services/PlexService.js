@@ -1,10 +1,23 @@
 import axios from 'axios';
+import credentialsService from './CredentialsService';
 
 class PlexService {
   constructor() {
-    // Try to restore from localStorage on initialization
-    this.token = localStorage.getItem('plexToken') || '';
-    this.baseUrl = localStorage.getItem('plexBaseUrl') || '';
+    this.token = '';
+    this.baseUrl = '';
+    // Load credentials when instantiated
+    this.loadCredentials();
+  }
+
+  /**
+   * Load credentials from server-side storage
+   */
+  async loadCredentials() {
+    const credentials = await credentialsService.getCredentials('plex');
+    if (credentials) {
+      this.baseUrl = credentials.baseUrl || '';
+      this.token = credentials.token || '';
+    }
   }
 
   /**
@@ -12,10 +25,16 @@ class PlexService {
    * @param {string} baseUrl - The base URL of your Plex instance (e.g., http://localhost:32400)
    * @param {string} token - Your Plex token
    */
-  configure(baseUrl, token) {
+  async configure(baseUrl, token) {
     // Normalize the URL by removing trailing slashes
     this.baseUrl = baseUrl ? baseUrl.replace(/\/+$/, '') : '';
     this.token = token;
+    
+    // Store credentials server-side
+    await credentialsService.storeCredentials('plex', {
+      baseUrl: this.baseUrl,
+      token: this.token
+    });
   }
 
   /**
@@ -31,11 +50,16 @@ class PlexService {
    * @returns {Promise<boolean>} - Whether the connection is successful
    */
   async testConnection() {
-    if (!this.isConfigured()) {
-      throw new Error('Plex service is not configured. Please set baseUrl and token.');
-    }
-
     try {
+      // Try to load credentials again in case they weren't ready during init
+      if (!this.isConfigured()) {
+        await this.loadCredentials();
+        
+        if (!this.isConfigured()) {
+          throw new Error('Plex service is not configured. Please set baseUrl and token.');
+        }
+      }
+
       const response = await axios.get(`${this.baseUrl}/identity`, {
         params: { 
           'X-Plex-Token': this.token 
@@ -55,8 +79,13 @@ class PlexService {
    * @returns {Promise<Array>} - List of recently watched movies
    */
   async getRecentlyWatchedMovies(limit = 100, daysAgo = 0) {
+    // Try to load credentials again in case they weren't ready during init
     if (!this.isConfigured()) {
-      throw new Error('Plex service is not configured. Please set baseUrl and token.');
+      await this.loadCredentials();
+      
+      if (!this.isConfigured()) {
+        throw new Error('Plex service is not configured. Please set baseUrl and token.');
+      }
     }
 
     try {
@@ -201,8 +230,13 @@ class PlexService {
    * @returns {Promise<Array>} - List of recently watched TV shows
    */
   async getRecentlyWatchedShows(limit = 100, daysAgo = 0) {
+    // Try to load credentials again in case they weren't ready during init
     if (!this.isConfigured()) {
-      throw new Error('Plex service is not configured. Please set baseUrl and token.');
+      await this.loadCredentials();
+      
+      if (!this.isConfigured()) {
+        throw new Error('Plex service is not configured. Please set baseUrl and token.');
+      }
     }
 
     try {

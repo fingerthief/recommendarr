@@ -49,6 +49,7 @@
 
 <script>
 import radarrService from '../services/RadarrService';
+import credentialsService from '../services/CredentialsService';
 
 export default {
   name: 'RadarrConnection',
@@ -66,22 +67,31 @@ export default {
       connecting: false
     };
   },
-  created() {
-    // Load saved credentials if they exist
-    const savedBaseUrl = localStorage.getItem('radarrBaseUrl');
-    const savedApiKey = localStorage.getItem('radarrApiKey');
-    
+  async created() {
     // If connected prop is true, set connection status right away
     if (this.connected) {
       this.connectionStatus = 'success';
+      
+      // Load current values from service
+      this.baseUrl = radarrService.baseUrl;
+      this.apiKey = radarrService.apiKey;
     }
     
-    if (savedBaseUrl && savedApiKey) {
-      this.baseUrl = savedBaseUrl;
-      this.apiKey = savedApiKey;
-      // Try to automatically connect with saved credentials
-      if (!this.connected) {
-        this.autoConnect();
+    // Try to load credentials from server
+    if (!this.baseUrl || !this.apiKey) {
+      try {
+        const credentials = await credentialsService.getCredentials('radarr');
+        if (credentials && credentials.baseUrl && credentials.apiKey) {
+          this.baseUrl = credentials.baseUrl;
+          this.apiKey = credentials.apiKey;
+          
+          // Try to automatically connect with loaded credentials
+          if (!this.connected) {
+            this.autoConnect();
+          }
+        }
+      } catch (error) {
+        console.error('Error loading saved Radarr credentials:', error);
       }
     }
   },
@@ -98,19 +108,17 @@ export default {
         }
         
         // Configure the service with saved details
-        radarrService.configure(this.baseUrl, this.apiKey);
+        await radarrService.configure(this.baseUrl, this.apiKey);
         
         // Test the connection
         const success = await radarrService.testConnection();
         
         // Only emit event if successful
         if (success) {
-          // Update the URL in case it was normalized
-          this.saveCredentials();
           this.$emit('connected');
         } else {
           // Clear invalid credentials
-          this.clearStoredCredentials();
+          await this.clearStoredCredentials();
         }
       } catch (error) {
         console.error('Error auto-connecting to Radarr:', error);
@@ -132,7 +140,7 @@ export default {
         }
         
         // Configure the service with provided details
-        radarrService.configure(this.baseUrl, this.apiKey);
+        await radarrService.configure(this.baseUrl, this.apiKey);
         
         // Test the connection
         const success = await radarrService.testConnection();
@@ -140,9 +148,8 @@ export default {
         // Update status based on response
         this.connectionStatus = success ? 'success' : 'error';
         
-        // If successful, save credentials and emit event
+        // If successful, emit connected event
         if (success) {
-          this.saveCredentials();
           this.$emit('connected');
         }
       } catch (error) {
@@ -177,13 +184,9 @@ export default {
       }
     },
     
-    saveCredentials() {
-      localStorage.setItem('radarrBaseUrl', this.baseUrl);
-      localStorage.setItem('radarrApiKey', this.apiKey);
-    },
-    clearStoredCredentials() {
-      localStorage.removeItem('radarrBaseUrl');
-      localStorage.removeItem('radarrApiKey');
+    async clearStoredCredentials() {
+      // Delete credentials from server
+      await credentialsService.deleteCredentials('radarr');
     },
     
     disconnect() {

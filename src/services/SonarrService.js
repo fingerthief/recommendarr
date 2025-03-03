@@ -1,13 +1,26 @@
 import axios from 'axios';
 import apiService from './ApiService';
+import credentialsService from './CredentialsService';
 
 class SonarrService {
   constructor() {
-    // Try to restore from localStorage on initialization
-    this.apiKey = localStorage.getItem('sonarrApiKey') || '';
-    this.baseUrl = localStorage.getItem('sonarrBaseUrl') || '';
+    this.apiKey = '';
+    this.baseUrl = '';
     // Flag to determine if we should use the proxy
     this.useProxy = true;
+    // Load credentials when instantiated
+    this.loadCredentials();
+  }
+  
+  /**
+   * Load credentials from server-side storage
+   */
+  async loadCredentials() {
+    const credentials = await credentialsService.getCredentials('sonarr');
+    if (credentials) {
+      this.baseUrl = credentials.baseUrl || '';
+      this.apiKey = credentials.apiKey || '';
+    }
   }
   
   /**
@@ -21,7 +34,12 @@ class SonarrService {
    */
   async _apiRequest(endpoint, method = 'GET', data = null, params = {}) {
     if (!this.isConfigured()) {
-      throw new Error('Sonarr service is not configured. Please set baseUrl and apiKey.');
+      // Try to load credentials again in case they weren't ready during init
+      await this.loadCredentials();
+      
+      if (!this.isConfigured()) {
+        throw new Error('Sonarr service is not configured. Please set baseUrl and apiKey.');
+      }
     }
 
     // Always include API key in params
@@ -80,10 +98,16 @@ class SonarrService {
    * @param {string} baseUrl - The base URL of your Sonarr instance (e.g., http://localhost:8989)
    * @param {string} apiKey - Your Sonarr API key
    */
-  configure(baseUrl, apiKey) {
+  async configure(baseUrl, apiKey) {
     // Normalize the URL by removing trailing slashes
     this.baseUrl = baseUrl ? baseUrl.replace(/\/+$/, '') : '';
     this.apiKey = apiKey;
+    
+    // Store credentials server-side
+    await credentialsService.storeCredentials('sonarr', {
+      baseUrl: this.baseUrl,
+      apiKey: this.apiKey
+    });
   }
 
   /**

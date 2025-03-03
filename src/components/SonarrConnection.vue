@@ -50,6 +50,7 @@
 
 <script>
 import sonarrService from '../services/SonarrService';
+import credentialsService from '../services/CredentialsService';
 import axios from 'axios';
 
 export default {
@@ -68,22 +69,31 @@ export default {
       connecting: false
     };
   },
-  created() {
-    // Load saved credentials if they exist
-    const savedBaseUrl = localStorage.getItem('sonarrBaseUrl');
-    const savedApiKey = localStorage.getItem('sonarrApiKey');
-    
+  async created() {
     // If connected prop is true, set connection status right away
     if (this.connected) {
       this.connectionStatus = 'success';
+      
+      // Load current values from service
+      this.baseUrl = sonarrService.baseUrl;
+      this.apiKey = sonarrService.apiKey;
     }
     
-    if (savedBaseUrl && savedApiKey) {
-      this.baseUrl = savedBaseUrl;
-      this.apiKey = savedApiKey;
-      // Try to automatically connect with saved credentials
-      if (!this.connected) {
-        this.autoConnect();
+    // Try to load credentials from server
+    if (!this.baseUrl || !this.apiKey) {
+      try {
+        const credentials = await credentialsService.getCredentials('sonarr');
+        if (credentials && credentials.baseUrl && credentials.apiKey) {
+          this.baseUrl = credentials.baseUrl;
+          this.apiKey = credentials.apiKey;
+          
+          // Try to automatically connect with loaded credentials
+          if (!this.connected) {
+            this.autoConnect();
+          }
+        }
+      } catch (error) {
+        console.error('Error loading saved Sonarr credentials:', error);
       }
     }
   },
@@ -107,8 +117,8 @@ export default {
         
         // Only emit event if successful
         if (success) {
-          // Update the URL in case it was normalized
-          this.saveCredentials();
+          // Update credentials in service
+          await sonarrService.configure(this.baseUrl, this.apiKey);
           this.$emit('connected');
         } else {
           // Clear invalid credentials
@@ -136,7 +146,7 @@ export default {
         }
         
         // Configure the service with provided details
-        sonarrService.configure(this.baseUrl, this.apiKey);
+        await sonarrService.configure(this.baseUrl, this.apiKey);
         
         // Test the connection
         const success = await sonarrService.testConnection();
@@ -144,9 +154,8 @@ export default {
         // Update status based on response
         this.connectionStatus = success ? 'success' : 'error';
         
-        // If successful, save credentials and emit event
+        // If successful, emit event
         if (success) {
-          this.saveCredentials();
           this.$emit('connected');
         }
       } catch (error) {
@@ -207,13 +216,10 @@ export default {
       }
     },
     
-    saveCredentials() {
-      localStorage.setItem('sonarrBaseUrl', this.baseUrl);
-      localStorage.setItem('sonarrApiKey', this.apiKey);
-    },
-    clearStoredCredentials() {
-      localStorage.removeItem('sonarrBaseUrl');
-      localStorage.removeItem('sonarrApiKey');
+    // No longer needed - credentials are stored server-side now
+    async clearStoredCredentials() {
+      // Delete credentials from server instead of localStorage
+      await credentialsService.deleteCredentials('sonarr');
     },
     
     disconnect() {

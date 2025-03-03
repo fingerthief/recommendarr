@@ -41,6 +41,7 @@
 
 <script>
 import openAIService from '../services/OpenAIService';
+import credentialsService from '../services/CredentialsService';
 
 export default {
   name: 'OpenAIConnection',
@@ -52,47 +53,53 @@ export default {
       connecting: false
     };
   },
-  created() {
-    // Load saved credentials if they exist
-    const savedApiKey = localStorage.getItem('openaiApiKey');
-    const savedModel = localStorage.getItem('openaiModel');
-    
-    if (savedApiKey) {
-      this.apiKey = savedApiKey;
-      if (savedModel) {
-        this.model = savedModel;
+  async created() {
+    // Try to load credentials from server
+    try {
+      // First load current values if already configured
+      if (openAIService.isConfigured()) {
+        this.apiKey = openAIService.apiKey;
+        this.model = openAIService.model;
+        return;
       }
-      // Try to automatically configure with saved credentials
-      this.autoConnect();
+      
+      const credentials = await credentialsService.getCredentials('openai');
+      if (credentials && credentials.apiKey) {
+        this.apiKey = credentials.apiKey;
+        if (credentials.model) {
+          this.model = credentials.model;
+        }
+        // Try to automatically configure with loaded credentials
+        this.autoConnect();
+      }
+    } catch (error) {
+      console.error('Error loading saved OpenAI credentials:', error);
     }
   },
   methods: {
-    autoConnect() {
+    async autoConnect() {
       try {
         // Configure the service with saved details
-        openAIService.configure(this.apiKey, this.model);
+        await openAIService.configure(this.apiKey, this.model);
         
         // Emit event for successful configuration
         this.$emit('configured');
       } catch (error) {
         console.error('Error auto-configuring OpenAI service:', error);
         // Clear invalid credentials
-        this.clearStoredCredentials();
+        await this.clearStoredCredentials();
       }
     },
-    connect() {
+    async connect() {
       this.connecting = true;
       this.connectionStatus = null;
       
       try {
-        // Configure the service with provided details
-        openAIService.configure(this.apiKey, this.model);
+        // Configure the service with provided details (stores credentials server-side)
+        await openAIService.configure(this.apiKey, this.model);
         
         // Set status to success (no direct API test for API key validity)
         this.connectionStatus = 'success';
-        
-        // Save credentials
-        this.saveCredentials();
         
         // Emit event for successful configuration
         this.$emit('configured');
@@ -103,13 +110,9 @@ export default {
         this.connecting = false;
       }
     },
-    saveCredentials() {
-      localStorage.setItem('openaiApiKey', this.apiKey);
-      localStorage.setItem('openaiModel', this.model);
-    },
-    clearStoredCredentials() {
-      localStorage.removeItem('openaiApiKey');
-      localStorage.removeItem('openaiModel');
+    async clearStoredCredentials() {
+      // Delete credentials from server
+      await credentialsService.deleteCredentials('openai');
     }
   }
 };
