@@ -1,16 +1,18 @@
 version: '3'
 services:
+  # Web UI
   recommendarr:
     build: .
     container_name: recommendarr
     ports:
       - "3030:80"
     restart: unless-stopped
-    environment:
-      - VUE_APP_API_URL=http://localhost:3050/api
     depends_on:
       - api-server
+    networks:
+      - recommendarr-network
 
+  # API server 
   api-server:
     build:
       context: .
@@ -19,4 +21,14 @@ services:
     ports:
       - "3050:3050"
     restart: unless-stopped
-    network_mode: "host"  # Use host networking to access local network services
+    environment:
+      - DOCKER_ENV=true
+      - HOST_IP=${HOST_IP:-host.docker.internal}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - recommendarr-network
+
+networks:
+  recommendarr-network:
+    driver: bridge

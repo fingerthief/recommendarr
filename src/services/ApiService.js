@@ -5,7 +5,30 @@ import axios from 'axios';
  */
 class ApiService {
   constructor() {
-    this.baseUrl = process.env.VUE_APP_API_URL || 'http://localhost:3050/api';
+    // Use the configured API URL or try to detect it
+    this.baseUrl = process.env.VUE_APP_API_URL || this.detectApiUrl();
+    console.log(`Using API URL: ${this.baseUrl}`);
+  }
+  
+  /**
+   * Try to detect the best API URL based on the current environment
+   * @private
+   * @returns {string} API URL
+   */
+  detectApiUrl() {
+    // Default fallback when running locally for development
+    let apiBaseUrl = 'http://localhost:3050/api';
+    
+    // Get the current URL details
+    const protocol = window.location.protocol;
+    const host = window.location.hostname;
+    
+    // We always use the same hostname as the web UI but on port 3050
+    // This works for both local and remote access
+    apiBaseUrl = `${protocol}//${host}:3050/api`;
+    console.log('Using API URL:', apiBaseUrl);
+    
+    return apiBaseUrl;
   }
 
   /**

@@ -12,7 +12,7 @@
           placeholder="http://localhost:8989"
           required
         />
-        <small>Enter your Sonarr URL as you would access it locally (e.g., http://localhost:8989). The proxy will handle external connections for you.</small>
+        <small>Enter your Sonarr URL using the internal network IP (e.g., http://192.168.0.x:8989) for best results, especially for external access.</small>
       </div>
       
       <div class="form-group">
@@ -50,6 +50,7 @@
 
 <script>
 import sonarrService from '../services/SonarrService';
+import axios from 'axios';
 
 export default {
   name: 'SonarrConnection',
@@ -152,6 +153,10 @@ export default {
         console.error('Error connecting to Sonarr:', error);
         this.connectionStatus = 'error';
         
+        // Try to diagnose connection issue
+        const sonarrUrl = new URL(this.baseUrl);
+        this.diagnoseConnection(sonarrUrl.hostname, sonarrUrl.port);
+        
         // Display more helpful error message based on the error
         if (error.message) {
           // Show the message from the server if available
@@ -163,6 +168,18 @@ export default {
         }
       } finally {
         this.connecting = false;
+      }
+    },
+    
+    // Diagnostic helper to test network connectivity
+    async diagnoseConnection(host, port) {
+      try {
+        console.log(`Diagnosing connection to ${host}:${port}`);
+        // Check if the API server can reach the Sonarr host
+        const response = await axios.get(`/api/net-test?target=${host}&port=${port}`);
+        console.log('Connection diagnostic results:', response.data);
+      } catch (error) {
+        console.error('Error running connection diagnostics:', error);
       }
     },
     

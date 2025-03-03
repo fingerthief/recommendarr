@@ -1,9 +1,38 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const os = require('os');
+const dns = require('dns').promises;
 
 const app = express();
 const PORT = process.env.PORT || 3050;
+
+// Get host IP address
+function getHostIP() {
+  // Use environment variable if available (from docker-compose)
+  if (process.env.HOST_IP && process.env.HOST_IP !== 'localhost') {
+    return process.env.HOST_IP;
+  }
+  
+  // Otherwise try to determine it from network interfaces
+  const interfaces = os.networkInterfaces();
+  
+  // Check for a non-internal IPv4 address
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Skip internal and non-IPv4 addresses
+      if (!iface.internal && iface.family === 'IPv4') {
+        return iface.address;
+      }
+    }
+  }
+  
+  // Fallback
+  return 'localhost';
+}
+
+const HOST_IP = getHostIP();
+console.log(`Server running with host IP: ${HOST_IP}`);
 
 // Enable CORS
 app.use(cors());
@@ -13,10 +42,74 @@ app.use(express.json());
 
 // Simple health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ 
+    status: 'ok',
+    hostIP: HOST_IP,
+    environment: {
+      dockerEnv: process.env.DOCKER_ENV || 'false',
+      nodeEnv: process.env.NODE_ENV || 'development'
+    }
+  });
 });
 
 // Generic proxy endpoint for all services
+// Endpoint to help diagnose network connectivity issues
+app.get('/api/net-test', async (req, res) => {
+  const target = req.query.target;
+  
+  if (!target) {
+    return res.status(400).json({ error: 'Target IP or hostname required' });
+  }
+  
+  const results = {
+    target,
+    checks: {}
+  };
+  
+  try {
+    // Try to ping via DNS lookup
+    const dnsStartTime = Date.now();
+    try {
+      const dnsResult = await dns.lookup(target);
+      results.checks.dns = {
+        success: true,
+        ip: dnsResult.address,
+        time: Date.now() - dnsStartTime
+      };
+    } catch (error) {
+      results.checks.dns = {
+        success: false,
+        error: error.message
+      };
+    }
+    
+    // Try HTTP connection if port specified
+    const port = req.query.port;
+    if (port) {
+      const httpTarget = `http://${target}:${port}`;
+      try {
+        const httpStartTime = Date.now();
+        const response = await axios.get(httpTarget, { timeout: 5000 });
+        results.checks.http = {
+          success: true,
+          status: response.status,
+          time: Date.now() - httpStartTime
+        };
+      } catch (error) {
+        results.checks.http = {
+          success: false,
+          error: error.message,
+          code: error.code
+        };
+      }
+    }
+    
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/proxy', async (req, res) => {
   const { url, method = 'GET', data = null, params = null, headers = {} } = req.body;
   
@@ -29,21 +122,24 @@ app.post('/api/proxy', async (req, res) => {
   // Process URL to handle local network services
   let processedUrl = url;
   
-  // In Docker environment, we need to handle local network references
+  // In Docker environment, we need to handle local network references 
   if (process.env.DOCKER_ENV === 'true') {
+    console.log(`Original URL: ${url}`);
+    
     // Check if URL contains localhost or 127.0.0.1
     if (url.includes('localhost') || url.includes('127.0.0.1')) {
       // Replace localhost with host.docker.internal to access host machine services
       processedUrl = url.replace(/(localhost|127\.0\.0\.1)/, 'host.docker.internal');
       console.log(`Converted localhost URL to Docker-friendly format: ${processedUrl}`);
     } 
-    // Check if URL contains a local network IP (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    // Local network IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
     else if (/https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)\d+\.\d+/.test(url)) {
-      // For local network IPs, we use the host network in production
       console.log(`Using local network IP directly: ${url}`);
       
-      // No conversion needed for local network IPs in production
-      // The proxy server should be running with host networking to access the local network
+      // If we have a host IP environment variable, we can use it for diagnostics
+      if (process.env.HOST_IP) {
+        console.log(`Host IP from environment: ${process.env.HOST_IP}`);
+      }
     }
   }
   

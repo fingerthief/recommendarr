@@ -180,10 +180,18 @@ class SonarrService {
    */
   async testConnection() {
     try {
+      console.log('Testing Sonarr connection with URL:', this.baseUrl);
       await this._apiRequest('/api/v3/system/status');
+      console.log('Sonarr connection successful');
       return true;
     } catch (error) {
       console.error('Error connecting to Sonarr:', error);
+      // Log more detailed diagnostics information
+      if (this.useProxy) {
+        console.log('Using proxy mode - check server logs for details');
+      } else {
+        console.log('Using direct connection mode');
+      }
       return false;
     }
   }

@@ -157,7 +157,7 @@ docker run -d \
 
 ### Option 3: Docker Compose
 
-The repository includes a `docker-compose.yml` file. Simply run:
+The repository includes a `docker-compose.yml` file. For proper access from outside your network:
 
 ```bash
 # Clone the repository
@@ -166,11 +166,16 @@ git clone https://github.com/fingerthief/recommendarr.git
 # Navigate to the project directory 
 cd recommendarr
 
-# Start with docker-compose
+# Start with docker-compose (the containers will discover the host IP automatically)
 docker-compose up -d
 ```
 
 This will build the image from the local Dockerfile and start the service on port 3030.
+
+**Note for external access**: If you plan to access Recommendarr from outside your network, make sure to:
+1. Forward ports 3030 and 3050 on your router to your server
+2. When connecting to Sonarr/Radarr, use their local IP addresses (e.g., 192.168.0.x:8989)
+3. Make sure your Sonarr/Radarr services are running when you try to connect
 
 ## 🖥️ Compatible AI Services
 
