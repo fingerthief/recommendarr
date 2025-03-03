@@ -4,6 +4,7 @@ const axios = require('axios');
 const dns = require('dns').promises;
 const fs = require('fs').promises;
 const path = require('path');
+const encryptionService = require('./utils/encryption');
 
 const app = express();
 const PORT = process.env.PORT || 3050;
@@ -21,6 +22,9 @@ let credentials = {};
 // Create data directory if it doesn't exist and load credentials
 async function initCredentialsStorage() {
   try {
+    // Initialize encryption service first
+    await encryptionService.init();
+    
     // Ensure data directory exists
     try {
       await fs.mkdir(DATA_DIR, { recursive: true });
@@ -34,13 +38,25 @@ async function initCredentialsStorage() {
     // Try to load existing credentials
     try {
       const data = await fs.readFile(CREDENTIALS_FILE, 'utf8');
-      credentials = JSON.parse(data);
-      console.log('Loaded existing credentials');
+      const fileData = JSON.parse(data);
+      
+      // Check if data is already encrypted
+      if (fileData.encrypted && fileData.iv && fileData.authTag) {
+        // Decrypt the data
+        credentials = encryptionService.decrypt(fileData);
+        console.log('Loaded and decrypted existing credentials');
+      } else {
+        // Legacy unencrypted data - encrypt it now
+        credentials = fileData;
+        await saveCredentials();
+        console.log('Migrated unencrypted credentials to encrypted format');
+      }
     } catch (err) {
       if (err.code === 'ENOENT') {
         // File doesn't exist yet, initialize with empty object
-        await fs.writeFile(CREDENTIALS_FILE, JSON.stringify({}), 'utf8');
-        console.log('Created new credentials file');
+        credentials = {};
+        await saveCredentials();
+        console.log('Created new encrypted credentials file');
       } else {
         console.error('Error reading credentials file:', err);
       }
@@ -50,10 +66,14 @@ async function initCredentialsStorage() {
   }
 }
 
-// Save credentials to file
+// Save credentials to file with encryption
 async function saveCredentials() {
   try {
-    await fs.writeFile(CREDENTIALS_FILE, JSON.stringify(credentials, null, 2), 'utf8');
+    // Encrypt the credentials object
+    const encryptedData = encryptionService.encrypt(credentials);
+    
+    // Write encrypted data to file
+    await fs.writeFile(CREDENTIALS_FILE, JSON.stringify(encryptedData, null, 2), 'utf8');
   } catch (err) {
     console.error('Error saving credentials:', err);
   }

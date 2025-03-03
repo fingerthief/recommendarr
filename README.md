@@ -10,7 +10,7 @@ Recommendarr is a web application that generates personalized TV show and movie 
 - **Sonarr & Radarr Integration**: Connects directly to your media servers to analyze your TV and movie collections
 - **Plex & Jellyfin Integration**: Analyzes your watch history to provide better recommendations based on what you've actually watched
 - **Flexible AI Support**: Works with OpenAI, local models (Ollama/LM Studio), or any OpenAI-compatible API
-- **API Proxy**: Routes requests through a server-side proxy to avoid CORS issues and hide API keys
+- **API Server**: Routes requests through a server-side proxy to avoid CORS issues, store credentials securely, and hide API keys
 - **Customization Options**: Adjust recommendation count, model parameters, and more
 - **Dark/Light Mode**: Toggle between themes based on your preference
 - **Poster Images**: Displays media posters with fallback generation
@@ -37,10 +37,13 @@ docker pull tannermiddleton/recommendarr:latest
 docker run -d \
   --name recommendarr \
   -p 3030:80 \
+  -v recommendarr_data:/app/server/data \
   tannermiddleton/recommendarr:latest
 ```
 
 Then visit `http://localhost:3030` in your browser.
+
+Note: The `-v recommendarr_data:/app/server/data` parameter creates a Docker volume to persist your credentials between container restarts.
 
 For more Docker options, see the [Docker Support](#-docker-support) section below.
 
@@ -57,7 +60,7 @@ cd recommendarr
 npm install
 ```
 
-3. Run the development server and API proxy:
+3. Run the development server and API server:
 ```bash
 npm run dev
 ```
@@ -72,6 +75,8 @@ npm run serve
 # API server only
 npm run server
 ```
+
+The API server stores credentials in the `server/data` directory by default.
 
 ## 🔧 Configuration
 
@@ -127,10 +132,11 @@ The easiest way to run Recommendarr:
 # Pull the image
 docker pull tannermiddleton/recommendarr:latest
 
-# Run the container
+# Run the container with persistent data
 docker run -d \
   --name recommendarr \
   -p 3030:80 \
+  -v recommendarr_data:/app/server/data \
   tannermiddleton/recommendarr:latest
 ```
 
@@ -148,10 +154,11 @@ cd recommendarr
 # Build the Docker image
 docker build -t recommendarr:local .
 
-# Run the container
+# Run the container with persistent data
 docker run -d \
   --name recommendarr \
   -p 3030:80 \
+  -v recommendarr_data:/app/server/data \
   recommendarr:local
 ```
 
@@ -177,7 +184,25 @@ This will build the image from the local Dockerfile and start the service on por
 2. When connecting to Sonarr/Radarr, use their local IP addresses (e.g., 192.168.0.x:8989)
 3. Make sure your Sonarr/Radarr services are running when you try to connect
 
-## 🖥️ Compatible AI Services
+## 🖥️ Server API Features
+
+Recommendarr includes a built-in API server that provides several important features:
+
+1. **API Proxy**: Avoids CORS issues when connecting to media servers
+2. **Credential Storage**: Securely stores all your API keys and connection details
+3. **Session Persistence**: Maintains your connections between browser sessions
+4. **Security**: Keeps sensitive credentials out of client-side JavaScript
+5. **Centralized Management**: Provides a single place to manage all service connections
+
+The API server:
+- Automatically starts with the `npm run dev` command
+- Is included in the Docker image
+- Stores credentials in the `server/data` directory by default
+- Uses encrypted storage for sensitive information
+
+When using Docker, make sure to create a volume mount for `/app/server/data` to persist your credentials between container restarts.
+
+## 🤖 Compatible AI Services
 
 Recommendarr works with various AI services:
 
@@ -222,13 +247,17 @@ For best results, try setting max tokens to 4000 and temperature between 0.6-0.8
 - Get suggested movies with descriptions, reasoning, and poster images
 - Easily discover new films based on your existing collection
 
-## 🔒 Privacy
+## 🔒 Privacy and Security
 
 Your data never leaves your control:
-- Sonarr, Radarr, Plex, and Jellyfin API credentials are stored in your browser's localStorage
+- Sonarr, Radarr, Plex, Jellyfin, and AI service credentials are encrypted and stored securely on the server-side
+- AES-256-GCM encryption protects all stored credentials
+- No sensitive credentials are stored in browser localStorage, protecting against XSS vulnerabilities
+- Credentials persist between sessions without requiring re-entry
 - API requests are routed through the server-side proxy to hide your API keys from client browsers
 - Media library and watch history data is sent only to the AI service you configure
 - No analytics or tracking are included in the application
+- All stored credentials can be completely purged using the "Clear Data" button
 
 ## 💻 Development
 
