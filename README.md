@@ -30,22 +30,33 @@ Recommendarr is a web application that generates personalized TV show and movie 
 Using our pre-built Docker image is the quickest way to get started:
 
 ```bash
-# Pull the image
+# Pull both required images
 docker pull tannermiddleton/recommendarr:latest
+docker pull tannermiddleton/recommendarr-api:latest
 
-# Run the container
+# Run the UI container
 docker run -d \
   --name recommendarr \
   -p 3030:80 \
-  -v recommendarr_data:/app/server/data \
   tannermiddleton/recommendarr:latest
+
+# Run the API server container (required for credentials and proxy)
+docker run -d \
+  --name recommendarr-api \
+  -p 3050:3050 \
+  -v recommendarr_data:/app/server/data \
+  --env DOCKER_ENV=true \
+  tannermiddleton/recommendarr-api:latest
 ```
 
 Then visit `http://localhost:3030` in your browser.
 
-Note: The `-v recommendarr_data:/app/server/data` parameter creates a Docker volume to persist your credentials between container restarts.
+Note: 
+- Both containers are required - the UI container and the API server container
+- The `-v recommendarr_data:/app/server/data` parameter creates a Docker volume to persist your encrypted credentials
+- The API server runs on port 3050 and handles secure credential storage and proxying requests
 
-For more Docker options, see the [Docker Support](#-docker-support) section below.
+For even simpler setup, use docker-compose as described in the [Docker Support](#-docker-support) section below.
 
 ### Option 2: Manual Installation
 
