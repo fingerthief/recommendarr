@@ -140,6 +140,7 @@
 
 <script>
 import JellyfinService from '@/services/JellyfinService.js';
+import credentialsService from '@/services/CredentialsService.js';
 
 export default {
   name: 'JellyfinConnection',
@@ -151,9 +152,9 @@ export default {
   },
   data() {
     return {
-      jellyfinUrl: localStorage.getItem('jellyfinBaseUrl') || '',
-      jellyfinApiKey: localStorage.getItem('jellyfinApiKey') || '',
-      jellyfinUserId: localStorage.getItem('jellyfinUserId') || '',
+      jellyfinUrl: '',
+      jellyfinApiKey: '',
+      jellyfinUserId: '',
       jellyfinHistoryLimit: parseInt(localStorage.getItem('jellyfinHistoryLimit') || '50'),
       loading: false,
       message: '',
@@ -163,6 +164,28 @@ export default {
       loadingUsers: false,
       userSelectMode: false
     };
+  },
+  async created() {
+    // If already connected, load current values from service
+    if (this.connected) {
+      this.jellyfinUrl = JellyfinService.baseUrl;
+      this.jellyfinApiKey = JellyfinService.apiKey;
+      this.jellyfinUserId = JellyfinService.userId;
+    }
+    
+    // Try to load credentials from server if not set
+    if (!this.jellyfinUrl || !this.jellyfinApiKey) {
+      try {
+        const credentials = await credentialsService.getCredentials('jellyfin');
+        if (credentials) {
+          this.jellyfinUrl = credentials.baseUrl || '';
+          this.jellyfinApiKey = credentials.apiKey || '';
+          this.jellyfinUserId = credentials.userId || '';
+        }
+      } catch (error) {
+        console.error('Error loading saved Jellyfin credentials:', error);
+      }
+    }
   },
   computed: {
     canFetchUsers() {
@@ -233,7 +256,7 @@ export default {
       this.$emit('limitChanged', this.jellyfinHistoryLimit);
 
       // Configure the Jellyfin service
-      JellyfinService.configure(
+      await JellyfinService.configure(
         this.jellyfinUrl,
         this.jellyfinApiKey,
         this.jellyfinUserId
@@ -247,10 +270,6 @@ export default {
         
         if (result.success) {
           this.jellyfinConnected = true;
-          // Store credentials
-          localStorage.setItem('jellyfinBaseUrl', this.jellyfinUrl);
-          localStorage.setItem('jellyfinApiKey', this.jellyfinApiKey);
-          localStorage.setItem('jellyfinUserId', this.jellyfinUserId);
           this.$emit('connected', true);
         } else {
           this.jellyfinConnected = false;
@@ -266,10 +285,9 @@ export default {
       this.loading = false;
     },
     
-    clearStoredCredentials() {
-      localStorage.removeItem('jellyfinBaseUrl');
-      localStorage.removeItem('jellyfinApiKey');
-      localStorage.removeItem('jellyfinUserId');
+    async clearStoredCredentials() {
+      // Delete credentials from server
+      await credentialsService.deleteCredentials('jellyfin');
     },
     
     disconnect() {

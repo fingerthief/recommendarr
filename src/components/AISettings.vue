@@ -621,6 +621,7 @@ import sonarrService from '../services/SonarrService';
 import radarrService from '../services/RadarrService';
 import plexService from '../services/PlexService';
 import jellyfinService from '../services/JellyfinService';
+import credentialsService from '../services/CredentialsService';
 import PlexConnection from './PlexConnection.vue';
 import JellyfinConnection from './JellyfinConnection.vue';
 import SonarrConnection from './SonarrConnection.vue';
@@ -736,8 +737,35 @@ export default {
     }
   },
   created() {
-    // Load saved settings
+    // Load saved settings initially
     this.loadAllSettings();
+  },
+  
+  watch: {
+    // Watch for tab changes to reload credentials when a tab is visited
+    activeTab: {
+      handler(newTab) {
+        // Load the appropriate credentials when the tab changes
+        switch(newTab) {
+          case 'sonarr':
+            this.loadSonarrSettings();
+            break;
+          case 'radarr':
+            this.loadRadarrSettings();
+            break;
+          case 'plex':
+            this.loadPlexSettings();
+            break;
+          case 'jellyfin':
+            this.loadJellyfinSettings();
+            break;
+          case 'ai':
+            this.loadAISettings();
+            break;
+        }
+      },
+      immediate: true
+    }
   },
   methods: {
     // Collapsible Panel Methods
@@ -842,32 +870,125 @@ export default {
       this.closeJellyfinModal();
     },
     
-    loadAllSettings() {
-      // Load AI Settings
-      this.aiSettings.apiUrl = localStorage.getItem('aiApiUrl') || 'https://api.openai.com/v1';
-      this.aiSettings.apiKey = localStorage.getItem('openaiApiKey') || '';
-      this.aiSettings.selectedModel = localStorage.getItem('openaiModel') || 'gpt-3.5-turbo';
-      this.aiSettings.maxTokens = parseInt(localStorage.getItem('aiMaxTokens') || '800');
-      this.aiSettings.temperature = parseFloat(localStorage.getItem('aiTemperature') || '0.5');
-      
-      // Load Sonarr Settings
-      this.sonarrSettings.baseUrl = localStorage.getItem('sonarrBaseUrl') || '';
-      this.sonarrSettings.apiKey = localStorage.getItem('sonarrApiKey') || '';
-      
-      // Load Radarr Settings
-      this.radarrSettings.baseUrl = localStorage.getItem('radarrBaseUrl') || '';
-      this.radarrSettings.apiKey = localStorage.getItem('radarrApiKey') || '';
-      
-      // Load Plex Settings
-      this.plexSettings.baseUrl = localStorage.getItem('plexBaseUrl') || '';
-      this.plexSettings.token = localStorage.getItem('plexToken') || '';
-      this.plexSettings.recentLimit = parseInt(localStorage.getItem('plexRecentLimit') || '10');
-      
-      // Load Jellyfin Settings
-      this.jellyfinSettings.baseUrl = localStorage.getItem('jellyfinBaseUrl') || '';
-      this.jellyfinSettings.apiKey = localStorage.getItem('jellyfinApiKey') || '';
-      this.jellyfinSettings.userId = localStorage.getItem('jellyfinUserId') || '';
-      this.jellyfinSettings.recentLimit = parseInt(localStorage.getItem('jellyfinRecentLimit') || '10');
+    async loadAllSettings() {
+      // Load all settings from their respective services
+      await this.loadAISettings();
+      await this.loadSonarrSettings();
+      await this.loadRadarrSettings();
+      await this.loadPlexSettings();
+      await this.loadJellyfinSettings();
+    },
+    
+    async loadAISettings() {
+      try {
+        // First try to get from service directly
+        if (openAIService.isConfigured()) {
+          this.aiSettings.apiUrl = openAIService.baseUrl;
+          this.aiSettings.apiKey = openAIService.apiKey;
+          this.aiSettings.selectedModel = openAIService.model;
+          this.aiSettings.maxTokens = openAIService.maxTokens;
+          this.aiSettings.temperature = openAIService.temperature;
+          return;
+        }
+        
+        // If not configured, try to get from server-side storage
+        const credentials = await credentialsService.getCredentials('openai');
+        if (credentials) {
+          this.aiSettings.apiUrl = credentials.apiUrl || 'https://api.openai.com/v1';
+          this.aiSettings.apiKey = credentials.apiKey || '';
+          this.aiSettings.selectedModel = credentials.model || 'gpt-3.5-turbo';
+          this.aiSettings.maxTokens = credentials.maxTokens ? parseInt(credentials.maxTokens) : 800;
+          this.aiSettings.temperature = credentials.temperature ? parseFloat(credentials.temperature) : 0.5;
+        }
+      } catch (error) {
+        console.error('Error loading OpenAI settings:', error);
+      }
+    },
+    
+    async loadSonarrSettings() {
+      try {
+        // First try to get from service directly
+        if (sonarrService.isConfigured()) {
+          this.sonarrSettings.baseUrl = sonarrService.baseUrl;
+          this.sonarrSettings.apiKey = sonarrService.apiKey;
+          return;
+        }
+        
+        // If not configured, try to get from server-side storage
+        const credentials = await credentialsService.getCredentials('sonarr');
+        if (credentials) {
+          this.sonarrSettings.baseUrl = credentials.baseUrl || '';
+          this.sonarrSettings.apiKey = credentials.apiKey || '';
+        }
+      } catch (error) {
+        console.error('Error loading Sonarr settings:', error);
+      }
+    },
+    
+    async loadRadarrSettings() {
+      try {
+        // First try to get from service directly
+        if (radarrService.isConfigured()) {
+          this.radarrSettings.baseUrl = radarrService.baseUrl;
+          this.radarrSettings.apiKey = radarrService.apiKey;
+          return;
+        }
+        
+        // If not configured, try to get from server-side storage
+        const credentials = await credentialsService.getCredentials('radarr');
+        if (credentials) {
+          this.radarrSettings.baseUrl = credentials.baseUrl || '';
+          this.radarrSettings.apiKey = credentials.apiKey || '';
+        }
+      } catch (error) {
+        console.error('Error loading Radarr settings:', error);
+      }
+    },
+    
+    async loadPlexSettings() {
+      try {
+        // First try to get from service directly
+        if (plexService.isConfigured()) {
+          this.plexSettings.baseUrl = plexService.baseUrl;
+          this.plexSettings.token = plexService.token;
+          this.plexSettings.recentLimit = parseInt(localStorage.getItem('plexRecentLimit') || '10');
+          return;
+        }
+        
+        // If not configured, try to get from server-side storage
+        const credentials = await credentialsService.getCredentials('plex');
+        if (credentials) {
+          this.plexSettings.baseUrl = credentials.baseUrl || '';
+          this.plexSettings.token = credentials.token || '';
+          this.plexSettings.recentLimit = parseInt(localStorage.getItem('plexRecentLimit') || '10');
+        }
+      } catch (error) {
+        console.error('Error loading Plex settings:', error);
+      }
+    },
+    
+    async loadJellyfinSettings() {
+      try {
+        // First try to get from service directly
+        if (jellyfinService.isConfigured()) {
+          this.jellyfinSettings.baseUrl = jellyfinService.baseUrl;
+          this.jellyfinSettings.apiKey = jellyfinService.apiKey;
+          this.jellyfinSettings.userId = jellyfinService.userId;
+          this.jellyfinSettings.recentLimit = parseInt(localStorage.getItem('jellyfinRecentLimit') || '10');
+          return;
+        }
+        
+        // If not configured, try to get from server-side storage
+        const credentials = await credentialsService.getCredentials('jellyfin');
+        if (credentials) {
+          this.jellyfinSettings.baseUrl = credentials.baseUrl || '';
+          this.jellyfinSettings.apiKey = credentials.apiKey || '';
+          this.jellyfinSettings.userId = credentials.userId || '';
+          this.jellyfinSettings.recentLimit = parseInt(localStorage.getItem('jellyfinRecentLimit') || '10');
+        }
+      } catch (error) {
+        console.error('Error loading Jellyfin settings:', error);
+      }
     },
     
     // AI Service Methods
@@ -945,7 +1066,7 @@ export default {
       }
     },
     
-    saveAISettings() {
+    async saveAISettings() {
       try {
         // Validate the API URL
         if (this.aiSettings.apiUrl) {
@@ -968,15 +1089,8 @@ export default {
           }
         }
         
-        // Save to localStorage
-        localStorage.setItem('aiApiUrl', this.aiSettings.apiUrl);
-        localStorage.setItem('openaiApiKey', this.aiSettings.apiKey);
-        localStorage.setItem('openaiModel', this.aiSettings.selectedModel);
-        localStorage.setItem('aiMaxTokens', this.aiSettings.maxTokens.toString());
-        localStorage.setItem('aiTemperature', this.aiSettings.temperature.toString());
-        
-        // Update the service
-        openAIService.configure(
+        // Update the service (which will store credentials server-side)
+        await openAIService.configure(
           this.aiSettings.apiKey, 
           this.aiSettings.selectedModel,
           this.aiSettings.apiUrl,
@@ -1013,7 +1127,7 @@ export default {
       
       try {
         // Configure the service with provided details
-        sonarrService.configure(this.sonarrSettings.baseUrl, this.sonarrSettings.apiKey);
+        await sonarrService.configure(this.sonarrSettings.baseUrl, this.sonarrSettings.apiKey);
         
         // Test the connection
         const success = await sonarrService.testConnection();
@@ -1024,13 +1138,8 @@ export default {
           ? 'Connected successfully!'
           : 'Connection failed. Please check your URL and API key.';
           
-        // If successful, save the settings
+        // If successful, emit event to notify parent component
         if (success) {
-          // Save to localStorage
-          localStorage.setItem('sonarrBaseUrl', this.sonarrSettings.baseUrl);
-          localStorage.setItem('sonarrApiKey', this.sonarrSettings.apiKey);
-          
-          // Emit event to notify parent component that Sonarr settings were updated
           this.$emit('sonarr-settings-updated');
         }
           
@@ -1043,7 +1152,7 @@ export default {
       }
     },
     
-    saveSonarrSettings() {
+    async saveSonarrSettings() {
       try {
         if (!this.sonarrSettings.baseUrl || !this.sonarrSettings.apiKey) {
           this.saveSuccess = false;
@@ -1052,12 +1161,8 @@ export default {
           return;
         }
         
-        // Save to localStorage
-        localStorage.setItem('sonarrBaseUrl', this.sonarrSettings.baseUrl);
-        localStorage.setItem('sonarrApiKey', this.sonarrSettings.apiKey);
-        
-        // Configure the service
-        sonarrService.configure(this.sonarrSettings.baseUrl, this.sonarrSettings.apiKey);
+        // Configure the service (which will store credentials server-side)
+        await sonarrService.configure(this.sonarrSettings.baseUrl, this.sonarrSettings.apiKey);
         
         this.saveSuccess = true;
         this.saveMessage = 'Sonarr settings saved successfully!';
@@ -1087,7 +1192,7 @@ export default {
       
       try {
         // Configure the service with provided details
-        radarrService.configure(this.radarrSettings.baseUrl, this.radarrSettings.apiKey);
+        await radarrService.configure(this.radarrSettings.baseUrl, this.radarrSettings.apiKey);
         
         // Test the connection
         const success = await radarrService.testConnection();
@@ -1098,13 +1203,8 @@ export default {
           ? 'Connected successfully!'
           : 'Connection failed. Please check your URL and API key.';
         
-        // If successful, save the settings
+        // If successful, emit event to notify parent component
         if (success) {
-          // Save to localStorage
-          localStorage.setItem('radarrBaseUrl', this.radarrSettings.baseUrl);
-          localStorage.setItem('radarrApiKey', this.radarrSettings.apiKey);
-          
-          // Emit event to notify parent component that Radarr settings were updated
           this.$emit('radarr-settings-updated');
         }
           
@@ -1117,7 +1217,7 @@ export default {
       }
     },
     
-    saveRadarrSettings() {
+    async saveRadarrSettings() {
       try {
         if (!this.radarrSettings.baseUrl || !this.radarrSettings.apiKey) {
           this.saveSuccess = false;
@@ -1126,12 +1226,8 @@ export default {
           return;
         }
         
-        // Save to localStorage
-        localStorage.setItem('radarrBaseUrl', this.radarrSettings.baseUrl);
-        localStorage.setItem('radarrApiKey', this.radarrSettings.apiKey);
-        
-        // Configure the service
-        radarrService.configure(this.radarrSettings.baseUrl, this.radarrSettings.apiKey);
+        // Configure the service (which will store credentials server-side)
+        await radarrService.configure(this.radarrSettings.baseUrl, this.radarrSettings.apiKey);
         
         this.saveSuccess = true;
         this.saveMessage = 'Radarr settings saved successfully!';
@@ -1161,7 +1257,10 @@ export default {
       
       try {
         // Configure the service with provided details
-        plexService.configure(this.plexSettings.baseUrl, this.plexSettings.token);
+        await plexService.configure(this.plexSettings.baseUrl, this.plexSettings.token);
+        
+        // Store the recent limit in localStorage (server doesn't need this)
+        localStorage.setItem('plexRecentLimit', this.plexSettings.recentLimit.toString());
         
         // Test the connection
         const success = await plexService.testConnection();
@@ -1172,14 +1271,8 @@ export default {
           ? 'Connected successfully!'
           : 'Connection failed. Please check your URL and Plex token.';
         
-        // If successful, save the settings
+        // If successful, emit event to notify parent component
         if (success) {
-          // Save to localStorage
-          localStorage.setItem('plexBaseUrl', this.plexSettings.baseUrl);
-          localStorage.setItem('plexToken', this.plexSettings.token);
-          localStorage.setItem('plexRecentLimit', this.plexSettings.recentLimit.toString());
-          
-          // Emit event to notify parent component that Plex settings were updated
           this.$emit('plex-settings-updated');
         }
           
@@ -1192,7 +1285,7 @@ export default {
       }
     },
     
-    savePlexSettings() {
+    async savePlexSettings() {
       try {
         if (!this.plexSettings.baseUrl || !this.plexSettings.token) {
           this.saveSuccess = false;
@@ -1201,13 +1294,11 @@ export default {
           return;
         }
         
-        // Save to localStorage
-        localStorage.setItem('plexBaseUrl', this.plexSettings.baseUrl);
-        localStorage.setItem('plexToken', this.plexSettings.token);
+        // Store the recent limit in localStorage (server doesn't need this)
         localStorage.setItem('plexRecentLimit', this.plexSettings.recentLimit.toString());
         
-        // Configure the service
-        plexService.configure(this.plexSettings.baseUrl, this.plexSettings.token);
+        // Configure the service (which will store credentials server-side)
+        await plexService.configure(this.plexSettings.baseUrl, this.plexSettings.token);
         
         this.saveSuccess = true;
         this.saveMessage = 'Plex settings saved successfully!';
@@ -1237,11 +1328,14 @@ export default {
       
       try {
         // Configure the service with provided details
-        jellyfinService.configure(
+        await jellyfinService.configure(
           this.jellyfinSettings.baseUrl, 
           this.jellyfinSettings.apiKey,
           this.jellyfinSettings.userId
         );
+        
+        // Store the recent limit in localStorage (server doesn't need this)
+        localStorage.setItem('jellyfinRecentLimit', this.jellyfinSettings.recentLimit.toString());
         
         // Test the connection
         const result = await jellyfinService.testConnection();
@@ -1250,15 +1344,8 @@ export default {
         this.jellyfinConnectionStatus = result.success;
         this.jellyfinConnectionMessage = result.message;
         
-        // If successful, save the settings
+        // If successful, emit event to notify parent component
         if (result.success) {
-          // Save to localStorage
-          localStorage.setItem('jellyfinBaseUrl', this.jellyfinSettings.baseUrl);
-          localStorage.setItem('jellyfinApiKey', this.jellyfinSettings.apiKey);
-          localStorage.setItem('jellyfinUserId', this.jellyfinSettings.userId);
-          localStorage.setItem('jellyfinRecentLimit', this.jellyfinSettings.recentLimit.toString());
-          
-          // Emit event to notify parent component
           this.$emit('jellyfin-settings-updated');
         }
           
@@ -1271,7 +1358,7 @@ export default {
       }
     },
     
-    saveJellyfinSettings() {
+    async saveJellyfinSettings() {
       try {
         if (!this.jellyfinSettings.baseUrl || !this.jellyfinSettings.apiKey || !this.jellyfinSettings.userId) {
           this.saveSuccess = false;
@@ -1280,14 +1367,11 @@ export default {
           return;
         }
         
-        // Save to localStorage
-        localStorage.setItem('jellyfinBaseUrl', this.jellyfinSettings.baseUrl);
-        localStorage.setItem('jellyfinApiKey', this.jellyfinSettings.apiKey);
-        localStorage.setItem('jellyfinUserId', this.jellyfinSettings.userId);
+        // Store the recent limit in localStorage (server doesn't need this)
         localStorage.setItem('jellyfinRecentLimit', this.jellyfinSettings.recentLimit.toString());
         
-        // Configure the service
-        jellyfinService.configure(
+        // Configure the service (which will store credentials server-side)
+        await jellyfinService.configure(
           this.jellyfinSettings.baseUrl, 
           this.jellyfinSettings.apiKey,
           this.jellyfinSettings.userId

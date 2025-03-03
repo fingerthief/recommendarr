@@ -73,6 +73,7 @@
 
 <script>
 import plexService from '../services/PlexService';
+import credentialsService from '../services/CredentialsService';
 
 export default {
   name: 'PlexConnection',
@@ -91,23 +92,33 @@ export default {
       recentLimit: 50 // Default limit for recently watched items
     };
   },
-  created() {
-    // Load saved credentials if they exist
-    const savedBaseUrl = localStorage.getItem('plexBaseUrl');
-    const savedToken = localStorage.getItem('plexToken');
+  async created() {
     const savedRecentLimit = localStorage.getItem('plexRecentLimit');
     
     // If connected prop is true, set connection status right away
     if (this.connected) {
       this.connectionStatus = 'success';
+      
+      // Load current values from service
+      this.baseUrl = plexService.baseUrl;
+      this.token = plexService.token;
     }
     
-    if (savedBaseUrl && savedToken) {
-      this.baseUrl = savedBaseUrl;
-      this.token = savedToken;
-      // Try to automatically connect with saved credentials
-      if (!this.connected) {
-        this.autoConnect();
+    // Try to load credentials from server
+    if (!this.baseUrl || !this.token) {
+      try {
+        const credentials = await credentialsService.getCredentials('plex');
+        if (credentials && credentials.baseUrl && credentials.token) {
+          this.baseUrl = credentials.baseUrl;
+          this.token = credentials.token;
+          
+          // Try to automatically connect with loaded credentials
+          if (!this.connected) {
+            this.autoConnect();
+          }
+        }
+      } catch (error) {
+        console.error('Error loading saved Plex credentials:', error);
       }
     }
 
@@ -134,20 +145,18 @@ export default {
         }
         
         // Configure the service with saved details
-        plexService.configure(this.baseUrl, this.token);
+        await plexService.configure(this.baseUrl, this.token);
         
         // Test the connection
         const success = await plexService.testConnection();
         
         // Only emit event if successful
         if (success) {
-          // Update the URL in case it was normalized
-          this.saveCredentials();
           this.connectionStatus = 'success';
           this.$emit('connected');
         } else {
           // Clear invalid credentials
-          this.clearStoredCredentials();
+          await this.clearStoredCredentials();
         }
       } catch (error) {
         console.error('Error auto-connecting to Plex:', error);
@@ -169,7 +178,7 @@ export default {
         }
         
         // Configure the service with provided details
-        plexService.configure(this.baseUrl, this.token);
+        await plexService.configure(this.baseUrl, this.token);
         
         // Test the connection
         const success = await plexService.testConnection();
@@ -177,9 +186,8 @@ export default {
         // Update status based on response
         this.connectionStatus = success ? 'success' : 'error';
         
-        // If successful, save credentials and emit event
+        // If successful, emit event
         if (success) {
-          this.saveCredentials();
           this.$emit('connected');
         }
       } catch (error) {
@@ -214,13 +222,9 @@ export default {
       }
     },
     
-    saveCredentials() {
-      localStorage.setItem('plexBaseUrl', this.baseUrl);
-      localStorage.setItem('plexToken', this.token);
-    },
-    clearStoredCredentials() {
-      localStorage.removeItem('plexBaseUrl');
-      localStorage.removeItem('plexToken');
+    async clearStoredCredentials() {
+      // Delete credentials from server
+      await credentialsService.deleteCredentials('plex');
     },
     
     disconnect() {

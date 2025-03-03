@@ -12,6 +12,7 @@
           placeholder="http://localhost:8989"
           required
         />
+        <small>Enter your Sonarr URL using the internal network IP (e.g., http://192.168.0.x:8989) for best results, especially for external access.</small>
       </div>
       
       <div class="form-group">
@@ -49,6 +50,8 @@
 
 <script>
 import sonarrService from '../services/SonarrService';
+import credentialsService from '../services/CredentialsService';
+import axios from 'axios';
 
 export default {
   name: 'SonarrConnection',
@@ -66,22 +69,31 @@ export default {
       connecting: false
     };
   },
-  created() {
-    // Load saved credentials if they exist
-    const savedBaseUrl = localStorage.getItem('sonarrBaseUrl');
-    const savedApiKey = localStorage.getItem('sonarrApiKey');
-    
+  async created() {
     // If connected prop is true, set connection status right away
     if (this.connected) {
       this.connectionStatus = 'success';
+      
+      // Load current values from service
+      this.baseUrl = sonarrService.baseUrl;
+      this.apiKey = sonarrService.apiKey;
     }
     
-    if (savedBaseUrl && savedApiKey) {
-      this.baseUrl = savedBaseUrl;
-      this.apiKey = savedApiKey;
-      // Try to automatically connect with saved credentials
-      if (!this.connected) {
-        this.autoConnect();
+    // Try to load credentials from server
+    if (!this.baseUrl || !this.apiKey) {
+      try {
+        const credentials = await credentialsService.getCredentials('sonarr');
+        if (credentials && credentials.baseUrl && credentials.apiKey) {
+          this.baseUrl = credentials.baseUrl;
+          this.apiKey = credentials.apiKey;
+          
+          // Try to automatically connect with loaded credentials
+          if (!this.connected) {
+            this.autoConnect();
+          }
+        }
+      } catch (error) {
+        console.error('Error loading saved Sonarr credentials:', error);
       }
     }
   },
@@ -105,8 +117,8 @@ export default {
         
         // Only emit event if successful
         if (success) {
-          // Update the URL in case it was normalized
-          this.saveCredentials();
+          // Update credentials in service
+          await sonarrService.configure(this.baseUrl, this.apiKey);
           this.$emit('connected');
         } else {
           // Clear invalid credentials
@@ -116,6 +128,8 @@ export default {
         console.error('Error auto-connecting to Sonarr:', error);
         // Clear invalid credentials
         this.clearStoredCredentials();
+        
+        // No need to show alerts during auto-connect
       } finally {
         this.connecting = false;
       }
@@ -132,7 +146,7 @@ export default {
         }
         
         // Configure the service with provided details
-        sonarrService.configure(this.baseUrl, this.apiKey);
+        await sonarrService.configure(this.baseUrl, this.apiKey);
         
         // Test the connection
         const success = await sonarrService.testConnection();
@@ -140,16 +154,41 @@ export default {
         // Update status based on response
         this.connectionStatus = success ? 'success' : 'error';
         
-        // If successful, save credentials and emit event
+        // If successful, emit event
         if (success) {
-          this.saveCredentials();
           this.$emit('connected');
         }
       } catch (error) {
         console.error('Error connecting to Sonarr:', error);
         this.connectionStatus = 'error';
+        
+        // Try to diagnose connection issue
+        const sonarrUrl = new URL(this.baseUrl);
+        this.diagnoseConnection(sonarrUrl.hostname, sonarrUrl.port);
+        
+        // Display more helpful error message based on the error
+        if (error.message) {
+          // Show the message from the server if available
+          alert(`Connection error: ${error.message}`);
+        } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+          alert('Cannot connect to Sonarr. Please ensure the service is running and the URL is correct.');
+        } else if (error.status === 0) {
+          alert('Cannot connect to the API server. Please check your network connection.');
+        }
       } finally {
         this.connecting = false;
+      }
+    },
+    
+    // Diagnostic helper to test network connectivity
+    async diagnoseConnection(host, port) {
+      try {
+        console.log(`Diagnosing connection to ${host}:${port}`);
+        // Check if the API server can reach the Sonarr host
+        const response = await axios.get(`/api/net-test?target=${host}&port=${port}`);
+        console.log('Connection diagnostic results:', response.data);
+      } catch (error) {
+        console.error('Error running connection diagnostics:', error);
       }
     },
     
@@ -177,13 +216,10 @@ export default {
       }
     },
     
-    saveCredentials() {
-      localStorage.setItem('sonarrBaseUrl', this.baseUrl);
-      localStorage.setItem('sonarrApiKey', this.apiKey);
-    },
-    clearStoredCredentials() {
-      localStorage.removeItem('sonarrBaseUrl');
-      localStorage.removeItem('sonarrApiKey');
+    // No longer needed - credentials are stored server-side now
+    async clearStoredCredentials() {
+      // Delete credentials from server instead of localStorage
+      await credentialsService.deleteCredentials('sonarr');
     },
     
     disconnect() {

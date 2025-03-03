@@ -154,6 +154,7 @@ import sonarrService from './services/SonarrService'
 import radarrService from './services/RadarrService'
 import plexService from './services/PlexService'
 import jellyfinService from './services/JellyfinService'
+import credentialsService from './services/CredentialsService'
 
 export default {
   name: 'App',
@@ -197,7 +198,10 @@ export default {
       jellyfinOnlyMode: false // Whether to use only Jellyfin history for recommendations
     }
   },
-  created() {
+  async created() {
+    // Check if services have credentials stored server-side
+    await this.checkStoredCredentials();
+    
     // Check if Sonarr is already configured on startup
     if (sonarrService.isConfigured()) {
       this.checkSonarrConnection();
@@ -255,13 +259,102 @@ export default {
     }
   },
   methods: {
+    // Check if we have credentials stored server-side
+    async checkStoredCredentials() {
+      try {
+        // Get all services status from the server
+        const hasAnyService = await Promise.all([
+          credentialsService.hasCredentials('sonarr'),
+          credentialsService.hasCredentials('radarr'),
+          credentialsService.hasCredentials('plex'),
+          credentialsService.hasCredentials('jellyfin')
+        ]);
+        
+        // If any service has credentials, set up the appropriate services
+        if (hasAnyService.some(result => result === true)) {
+          // Try to configure services with stored credentials
+          await Promise.all([
+            this.configureServiceFromCredentials('sonarr'),
+            this.configureServiceFromCredentials('radarr'),
+            this.configureServiceFromCredentials('plex'),
+            this.configureServiceFromCredentials('jellyfin')
+          ]);
+        }
+      } catch (error) {
+        console.error('Error checking for stored credentials:', error);
+      }
+    },
+    
+    // Configure a service from stored server-side credentials
+    async configureServiceFromCredentials(serviceName) {
+      try {
+        // Get credentials for this service
+        const credentials = await credentialsService.getCredentials(serviceName);
+        if (!credentials) return;
+        
+        // Configure the appropriate service
+        switch(serviceName) {
+          case 'sonarr':
+            if (credentials.baseUrl && credentials.apiKey) {
+              await sonarrService.configure(credentials.baseUrl, credentials.apiKey);
+              const success = await sonarrService.testConnection();
+              if (success) {
+                this.sonarrConnected = true;
+                this.fetchSeriesData();
+              }
+            }
+            break;
+            
+          case 'radarr':
+            if (credentials.baseUrl && credentials.apiKey) {
+              await radarrService.configure(credentials.baseUrl, credentials.apiKey);
+              const success = await radarrService.testConnection();
+              if (success) {
+                this.radarrConnected = true;
+                this.fetchMoviesData();
+              }
+            }
+            break;
+            
+          case 'plex':
+            if (credentials.baseUrl && credentials.token) {
+              await plexService.configure(credentials.baseUrl, credentials.token);
+              const success = await plexService.testConnection();
+              if (success) {
+                this.plexConnected = true;
+                this.fetchPlexData();
+              }
+            }
+            break;
+            
+          case 'jellyfin':
+            if (credentials.baseUrl && credentials.apiKey && credentials.userId) {
+              await jellyfinService.configure(credentials.baseUrl, credentials.apiKey, credentials.userId);
+              const result = await jellyfinService.testConnection();
+              if (result.success) {
+                this.jellyfinConnected = true;
+                this.fetchJellyfinData();
+              }
+            }
+            break;
+        }
+      } catch (error) {
+        console.error(`Error configuring ${serviceName} from stored credentials:`, error);
+      }
+    },
+    
     // Handler methods for disconnection events from connection components
-    handleSonarrDisconnected() {
+    async handleSonarrDisconnected() {
       this.sonarrConnected = false;
       this.showSonarrConnect = false; // Don't show connect modal
       this.series = [];
+      
+      // Clean up localStorage (for backwards compatibility)
       localStorage.removeItem('sonarrBaseUrl');
       localStorage.removeItem('sonarrApiKey');
+      
+      // Delete credentials from server
+      await credentialsService.deleteCredentials('sonarr');
       
       // If we're on the TV recommendations tab and no longer have Sonarr connected,
       // switch to movie recommendations if Radarr is available
@@ -270,12 +363,17 @@ export default {
       }
     },
     
-    handleRadarrDisconnected() {
+    async handleRadarrDisconnected() {
       this.radarrConnected = false;
       this.showRadarrConnect = false; // Don't show connect modal
       this.movies = [];
+      
+      // Clean up localStorage (for backwards compatibility)
       localStorage.removeItem('radarrBaseUrl');
       localStorage.removeItem('radarrApiKey');
+      
+      // Delete credentials from server
+      await credentialsService.deleteCredentials('radarr');
       
       // If we're on the movie recommendations tab and no longer have Radarr connected,
       // switch to TV recommendations if Sonarr is available
@@ -284,25 +382,35 @@ export default {
       }
     },
     
-    handlePlexDisconnected() {
+    async handlePlexDisconnected() {
       this.plexConnected = false;
       this.showPlexConnect = false; // Don't show connect modal
       this.recentlyWatchedMovies = [];
       this.recentlyWatchedShows = [];
+      
+      // Clean up localStorage (for backwards compatibility)
       localStorage.removeItem('plexBaseUrl');
       localStorage.removeItem('plexToken');
       localStorage.removeItem('plexRecentLimit');
+      
+      // Delete credentials from server
+      await credentialsService.deleteCredentials('plex');
     },
     
-    handleJellyfinDisconnected() {
+    async handleJellyfinDisconnected() {
       this.jellyfinConnected = false;
       this.showJellyfinConnect = false; // Don't show connect modal
       this.jellyfinRecentlyWatchedMovies = [];
       this.jellyfinRecentlyWatchedShows = [];
+      
+      // Clean up localStorage (for backwards compatibility)
       localStorage.removeItem('jellyfinBaseUrl');
       localStorage.removeItem('jellyfinApiKey');
       localStorage.removeItem('jellyfinUserId');
       localStorage.removeItem('jellyfinRecentLimit');
+      
+      // Delete credentials from server
+      await credentialsService.deleteCredentials('jellyfin');
     },
     
     async openJellyfinUserSelect() {
@@ -542,68 +650,79 @@ export default {
       console.log('AI settings updated successfully');
     },
     
-    handleSonarrSettingsUpdated() {
-      // Check if there are Sonarr credentials in localStorage
-      const baseUrl = localStorage.getItem('sonarrBaseUrl');
-      const apiKey = localStorage.getItem('sonarrApiKey');
-      
-      if (baseUrl && apiKey) {
+    async handleSonarrSettingsUpdated() {
+      // Check if Sonarr service is configured in memory
+      if (sonarrService.isConfigured()) {
         // Check the Sonarr connection with the new settings
         this.checkSonarrConnection();
         console.log('Sonarr settings updated, testing connection');
-      } else {
-        // No credentials, mark as disconnected
+        return;
+      }
+      
+      // If not in memory, check server storage
+      try {
+        await this.configureServiceFromCredentials('sonarr');
+      } catch (error) {
+        console.error('Error loading Sonarr credentials:', error);
         this.sonarrConnected = false;
       }
     },
     
-    handleRadarrSettingsUpdated() {
-      // Check if there are Radarr credentials in localStorage
-      const baseUrl = localStorage.getItem('radarrBaseUrl');
-      const apiKey = localStorage.getItem('radarrApiKey');
-      
-      if (baseUrl && apiKey) {
+    async handleRadarrSettingsUpdated() {
+      // Check if Radarr service is configured in memory
+      if (radarrService.isConfigured()) {
         // Check the Radarr connection with the new settings
         this.checkRadarrConnection();
         console.log('Radarr settings updated, testing connection');
-      } else {
-        // No credentials, mark as disconnected
+        return;
+      }
+      
+      // If not in memory, check server storage
+      try {
+        await this.configureServiceFromCredentials('radarr');
+      } catch (error) {
+        console.error('Error loading Radarr credentials:', error);
         this.radarrConnected = false;
       }
     },
     
-    handlePlexSettingsUpdated() {
-      // Check if there are Plex credentials in localStorage
-      const baseUrl = localStorage.getItem('plexBaseUrl');
-      const token = localStorage.getItem('plexToken');
-      
-      if (baseUrl && token) {
+    async handlePlexSettingsUpdated() {
+      // Check if Plex service is configured in memory
+      if (plexService.isConfigured()) {
         // Check the Plex connection with the new settings
         this.checkPlexConnection();
         console.log('Plex settings updated, testing connection');
-      } else {
-        // No credentials, mark as disconnected
+        return;
+      }
+      
+      // If not in memory, check server storage
+      try {
+        await this.configureServiceFromCredentials('plex');
+      } catch (error) {
+        console.error('Error loading Plex credentials:', error);
         this.plexConnected = false;
       }
     },
     
-    handleJellyfinSettingsUpdated() {
-      // Check if there are Jellyfin credentials in localStorage
-      const baseUrl = localStorage.getItem('jellyfinBaseUrl');
-      const apiKey = localStorage.getItem('jellyfinApiKey');
-      const userId = localStorage.getItem('jellyfinUserId');
-      
-      if (baseUrl && apiKey && userId) {
+    async handleJellyfinSettingsUpdated() {
+      // Check if Jellyfin service is configured in memory
+      if (jellyfinService.isConfigured()) {
         // Check the Jellyfin connection with the new settings
         this.checkJellyfinConnection();
         console.log('Jellyfin settings updated, testing connection');
-      } else {
-        // No credentials, mark as disconnected
+        return;
+      }
+      
+      // If not in memory, check server storage
+      try {
+        await this.configureServiceFromCredentials('jellyfin');
+      } catch (error) {
+        console.error('Error loading Jellyfin credentials:', error);
         this.jellyfinConnected = false;
       }
     },
-    handleLogout() {
-      // Clear all stored credentials
+    async handleLogout() {
+      // Clear all stored credentials from localStorage (for backwards compatibility)
       localStorage.removeItem('sonarrBaseUrl');
       localStorage.removeItem('sonarrApiKey');
       localStorage.removeItem('radarrBaseUrl');
@@ -615,6 +734,19 @@ export default {
       localStorage.removeItem('jellyfinUserId');
       localStorage.removeItem('openaiApiKey');
       localStorage.removeItem('openaiModel');
+      
+      // Delete all credentials from server
+      try {
+        await Promise.all([
+          credentialsService.deleteCredentials('sonarr'),
+          credentialsService.deleteCredentials('radarr'),
+          credentialsService.deleteCredentials('plex'),
+          credentialsService.deleteCredentials('jellyfin'),
+          credentialsService.deleteCredentials('openai')
+        ]);
+      } catch (error) {
+        console.error('Error deleting server-side credentials:', error);
+      }
       
       // Reset service configurations
       sonarrService.configure('', '');

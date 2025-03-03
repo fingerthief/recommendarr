@@ -1,10 +1,26 @@
+/* eslint-disable no-unused-vars */
 import axios from 'axios';
+/* eslint-enable no-unused-vars */
+import credentialsService from './CredentialsService';
+import apiService from './ApiService';
 
 class PlexService {
   constructor() {
-    // Try to restore from localStorage on initialization
-    this.token = localStorage.getItem('plexToken') || '';
-    this.baseUrl = localStorage.getItem('plexBaseUrl') || '';
+    this.token = '';
+    this.baseUrl = '';
+    // Load credentials when instantiated
+    this.loadCredentials();
+  }
+
+  /**
+   * Load credentials from server-side storage
+   */
+  async loadCredentials() {
+    const credentials = await credentialsService.getCredentials('plex');
+    if (credentials) {
+      this.baseUrl = credentials.baseUrl || '';
+      this.token = credentials.token || '';
+    }
   }
 
   /**
@@ -12,10 +28,16 @@ class PlexService {
    * @param {string} baseUrl - The base URL of your Plex instance (e.g., http://localhost:32400)
    * @param {string} token - Your Plex token
    */
-  configure(baseUrl, token) {
+  async configure(baseUrl, token) {
     // Normalize the URL by removing trailing slashes
     this.baseUrl = baseUrl ? baseUrl.replace(/\/+$/, '') : '';
     this.token = token;
+    
+    // Store credentials server-side
+    await credentialsService.storeCredentials('plex', {
+      baseUrl: this.baseUrl,
+      token: this.token
+    });
   }
 
   /**
@@ -31,16 +53,24 @@ class PlexService {
    * @returns {Promise<boolean>} - Whether the connection is successful
    */
   async testConnection() {
-    if (!this.isConfigured()) {
-      throw new Error('Plex service is not configured. Please set baseUrl and token.');
-    }
-
     try {
-      const response = await axios.get(`${this.baseUrl}/identity`, {
+      // Try to load credentials again in case they weren't ready during init
+      if (!this.isConfigured()) {
+        await this.loadCredentials();
+        
+        if (!this.isConfigured()) {
+          throw new Error('Plex service is not configured. Please set baseUrl and token.');
+        }
+      }
+
+      const response = await apiService.proxyRequest({
+        url: `${this.baseUrl}/identity`,
+        method: 'GET',
         params: { 
           'X-Plex-Token': this.token 
         }
       });
+      
       return response.status === 200;
     } catch (error) {
       console.error('Error connecting to Plex:', error);
@@ -55,8 +85,13 @@ class PlexService {
    * @returns {Promise<Array>} - List of recently watched movies
    */
   async getRecentlyWatchedMovies(limit = 100, daysAgo = 0) {
+    // Try to load credentials again in case they weren't ready during init
     if (!this.isConfigured()) {
-      throw new Error('Plex service is not configured. Please set baseUrl and token.');
+      await this.loadCredentials();
+      
+      if (!this.isConfigured()) {
+        throw new Error('Plex service is not configured. Please set baseUrl and token.');
+      }
     }
 
     try {
@@ -79,8 +114,10 @@ class PlexService {
         params['viewedAt>'] = timestampFilter;
       }
       
-      // Get recently watched from the history endpoint
-      const response = await axios.get(`${this.baseUrl}/status/sessions/history/all`, {
+      // Get recently watched from the history endpoint through the proxy server
+      const response = await apiService.proxyRequest({
+        url: `${this.baseUrl}/status/sessions/history/all`,
+        method: 'GET',
         params: params
       });
 
@@ -201,8 +238,13 @@ class PlexService {
    * @returns {Promise<Array>} - List of recently watched TV shows
    */
   async getRecentlyWatchedShows(limit = 100, daysAgo = 0) {
+    // Try to load credentials again in case they weren't ready during init
     if (!this.isConfigured()) {
-      throw new Error('Plex service is not configured. Please set baseUrl and token.');
+      await this.loadCredentials();
+      
+      if (!this.isConfigured()) {
+        throw new Error('Plex service is not configured. Please set baseUrl and token.');
+      }
     }
 
     try {
@@ -225,8 +267,10 @@ class PlexService {
         params['viewedAt>'] = timestampFilter;
       }
       
-      // Get recently watched from the history endpoint
-      const response = await axios.get(`${this.baseUrl}/status/sessions/history/all`, {
+      // Get recently watched from the history endpoint through the proxy server
+      const response = await apiService.proxyRequest({
+        url: `${this.baseUrl}/status/sessions/history/all`,
+        method: 'GET',
         params: params
       });
 

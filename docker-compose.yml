@@ -1,8 +1,38 @@
 version: '3'
 services:
+  # Web UI
   recommendarr:
     build: .
     container_name: recommendarr
     ports:
       - "3030:80"
     restart: unless-stopped
+    depends_on:
+      - api-server
+    networks:
+      - recommendarr-network
+
+  # API server 
+  api-server:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    container_name: recommendarr-api
+    ports:
+      - "3050:3050"
+    restart: unless-stopped
+    environment:
+      - DOCKER_ENV=true
+    volumes:
+      - recommendarr_data:/app/server/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - recommendarr-network
+
+networks:
+  recommendarr-network:
+    driver: bridge
+
+volumes:
+  recommendarr_data:
