@@ -3,16 +3,8 @@ services:
   recommendarr:
     image: tannermiddleton/recommendarr:latest
     container_name: recommendarr
-    depends_on:
-      - api
     ports:
       - "3030:80"
-    restart: unless-stopped
-
-  api:
-    image: tannermiddleton/recommendarr-api:latest
-    container_name: recommendarr-api
-    ports:
       - "3050:3050"
     environment:
       - NODE_ENV=production
