@@ -3,19 +3,8 @@ services:
   recommendarr:
     build: .
     container_name: recommendarr
-    depends_on:
-      - api
     ports:
       - "3030:80"
-    restart: unless-stopped
-
-  # API server 
-  api:
-    build:
-      context: .
-      dockerfile: docker/api.Dockerfile
-    container_name: recommendarr-api
-    ports:
       - "3050:3050"
     environment:
       - NODE_ENV=production

@@ -38,17 +38,16 @@ docker-compose up -d --build
 ```
 
 This will:
-1. Build both the frontend and API server images locally
-2. Configure them to work together with the proper networking
-3. Start both services with the correct configuration
+1. Build the all-in-one Recommendarr image locally
+2. Start the service with proper configuration
 
 Then visit `http://localhost:3030` in your browser to access the application.
 
-The API server runs on port 3050 and provides secure credential storage and proxy functionality for accessing services that may be blocked by CORS restrictions.
+The application includes an API server running on port 3050 (within the same container) that provides secure credential storage and proxy functionality for accessing services that may be blocked by CORS restrictions.
 
-### Option 2: Docker (Frontend Only)
+### Option 2: Docker Run Command
 
-You can also run just the frontend container:
+You can also run the container directly with docker run:
 
 ```bash
 # Pull the image
@@ -58,10 +57,12 @@ docker pull tannermiddleton/recommendarr:latest
 docker run -d \
   --name recommendarr \
   -p 3030:80 \
+  -p 3050:3050 \
+  -v $(pwd)/server/data:/app/server/data \
   tannermiddleton/recommendarr:latest
 ```
 
-Then visit `http://localhost:3030` in your browser. Note that without the API server, credential storage will be limited to your browser's local storage.
+Then visit `http://localhost:3030` in your browser. This command includes the volume mount for persistent credential storage.
 
 For more Docker options, see the [Docker Support](#-docker-support) section below.
 
@@ -137,13 +138,13 @@ You can connect to any combination of these services based on your needs.
 
 ### Using docker-compose.remote.yml
 
-For convenience, a pre-configured `docker-compose.remote.yml` file is included in the repository that uses the Docker Hub images:
+For convenience, a pre-configured `docker-compose.remote.yml` file is included in the repository that uses the Docker Hub image:
 
 ```bash
 # Stop any existing instances first
 docker-compose down
 
-# Pull the latest images and start the services
+# Pull the latest image and start the service
 docker-compose -f docker-compose.remote.yml pull && docker-compose -f docker-compose.remote.yml up -d
 ```
 
@@ -198,16 +199,8 @@ services:
   recommendarr:
     image: tannermiddleton/recommendarr:latest
     container_name: recommendarr
-    depends_on:
-      - api
     ports:
       - "3030:80"
-    restart: unless-stopped
-
-  api:
-    image: tannermiddleton/recommendarr-api:latest
-    container_name: recommendarr-api
-    ports:
       - "3050:3050"
     environment:
       - NODE_ENV=production
@@ -224,7 +217,7 @@ mkdir -p server/data
 docker-compose up -d
 ```
 
-This will pull the pre-built images from Docker Hub and start the services on ports 3030 (frontend) and 3050 (API server).
+This will pull the pre-built image from Docker Hub and start the all-in-one Recommendarr service.
 
 **Key benefits of using either Docker Compose method:**
 - The API server data directory is mounted as a volume, ensuring your credentials persist across container restarts
