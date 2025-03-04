@@ -266,7 +266,7 @@ class OpenAIService {
       const recommendationCount = Math.min(Math.max(count, 1), 50);
 
       // Base prompt
-      let userPrompt = `Based on ${sourceText}, recommend ${recommendationCount} new shows I might enjoy that are CRITICALLY ACCLAIMED and HIGHLY RATED. Be brief and direct - no more than 2-3 sentences per section.`;
+      let userPrompt = `Based on ${sourceText}, perform quantitative and qualitative analysis to recommend ${recommendationCount} new shows I might enjoy that are CRITICALLY ACCLAIMED and HIGHLY RATED. Be brief and direct - no more than 2-3 sentences per section.`;
       
       // Add genre preference if specified
       if (genre) {
@@ -284,13 +284,14 @@ class OpenAIService {
         userPrompt += ` Please ONLY recommend TV shows in ${language} language.`;
       }
       
-      // Add instructions for diverse, high-quality recommendations
-      userPrompt += ` Prioritize shows that match these criteria:
-1. Highest overall quality and critical acclaim
-2. Strong thematic or stylistic connections to my current library
-3. Diverse in content (not just the most obvious recommendations)
-4. Include a mix of both popular and lesser-known hidden gems
-5. Focus on complete or ongoing shows with consistent quality, not canceled after 1-2 seasons`;
+      // Add instructions for diverse, high-quality recommendations with analytical approach
+      userPrompt += ` Apply the following analytical criteria in your evaluation process:
+1. Quantitative analysis: Consider aggregate critic scores, audience ratings, cultural impact metrics, and awards recognition
+2. Qualitative analysis: Assess narrative complexity, thematic resonance with my library, production quality, and performance depth
+3. Pattern recognition: Identify recurring themes, styles, and creative elements across my collection that predict high enjoyment
+4. Comparative context: Evaluate shows within their genre/era context rather than against all media broadly 
+5. Diversity algorithm: Balance mainstream hits with under-recognized works showing statistical quality markers
+6. Longevity metrics: Prioritize complete shows or those with proven quality consistency across multiple seasons`;
       
       // Add library information with appropriate context based on mode
       if (this.useSampledLibrary) {
@@ -331,9 +332,15 @@ Why you might like it: [short reason based on my current shows]
 Recommendarr Rating: [score]% - [brief qualitative assessment]
 Available on: [streaming service]
 
-For the Recommendarr Rating, silently calculate a score from 0-100% by privately considering available ratings from sources like IMDB, Rotten Tomatoes, TVDB, Metacritic, and other audience ratings. Then provide:
-- Just a single percentage number (e.g., "85%")
-- A brief qualitative assessment of the show that explains its strengths/weaknesses
+For the Recommendarr Rating, calculate a data-driven score from 0-100% by synthesizing:
+- Weighted critic aggregation: Factor multiple professional review sources, emphasizing consensus over outliers
+- Cultural impact measurement: Consider social/academic discourse, influence on medium, and enduring relevance
+- Technical achievement evaluation: Assess production quality, acting performances, writing, and directorial execution
+- Audience reception analysis: Balance broad popularity metrics with demographic-specific appreciation patterns
+- Comparative positioning: Evaluate relative to genre benchmarks and similar content in my collection
+Then provide:
+- A single percentage number (e.g., "85%")
+- A concise qualitative assessment explaining key strengths/weaknesses based on this holistic analysis
 DO NOT mention or cite any specific external rating sources or scores in your explanation.
 
 2. [Next Show Title]:
@@ -350,7 +357,7 @@ STRICT RULES:
       this.tvConversation = [
         {
           role: "system",
-          content: "You are a TV show recommendation assistant. Your task is to recommend new TV shows based on the user's current library and recently watched content. Be concise and follow EXACTLY the required output format. You MUST adhere to these CRITICAL rules:\n\n1. NEVER recommend shows that exist in the user's library, liked shows list, or any exclusion list provided\n2. Only recommend shows that truly match the user's preferences\n3. VERIFY each recommendation is not in ANY of the exclusion lists before suggesting it\n4. DO NOT use any Markdown formatting like ** for bold or * for italic\n5. DO NOT include any extra text, explanations, or headings\n6. Format each recommendation EXACTLY as instructed\n7. Follow the numbering format precisely (1., 2., etc.)"
+          content: "You are a sophisticated media recommender system employing advanced analytical methodologies to recommend TV shows based on content patterns, viewer preferences, and media reception metrics. Be concise and follow EXACTLY the required output format. You MUST adhere to these CRITICAL rules:\n\n1. NEVER recommend shows that exist in the user's library, liked shows list, or any exclusion list provided\n2. Only recommend shows that demonstrate strong statistical and thematic alignment with the user's preference indicators\n3. VERIFY each recommendation against ALL exclusion datasets before finalizing selection\n4. DO NOT use any Markdown formatting like ** for bold or * for italic\n5. DO NOT include any extra text, explanations, or headings\n6. Format each recommendation EXACTLY as instructed\n7. Follow the numbering format precisely (1., 2., etc.)\n8. Maintain analytical rigor while ensuring recommendations remain accessible and engaging"
         },
         {
           role: "user",
@@ -455,7 +462,7 @@ STRICT RULES:
       const recommendationCount = Math.min(Math.max(count, 1), 50);
       
       // Base prompt
-      let userPrompt = `Based on ${sourceText}, recommend ${recommendationCount} new movies I might enjoy that are CRITICALLY ACCLAIMED and HIGHLY RATED. Be brief and direct - no more than 2-3 sentences per section.`;
+      let userPrompt = `Based on ${sourceText}, perform quantitative and qualitative analysis to recommend ${recommendationCount} new movies I might enjoy that are CRITICALLY ACCLAIMED and HIGHLY RATED. Be brief and direct - no more than 2-3 sentences per section.`;
       
       // Add genre preference if specified
       if (genre) {
@@ -473,13 +480,14 @@ STRICT RULES:
         userPrompt += ` Please ONLY recommend movies in ${language} language.`;
       }
       
-      // Add instructions for diverse, high-quality recommendations
-      userPrompt += ` Prioritize movies that match these criteria:
-1. Highest overall quality and critical acclaim
-2. Strong thematic or stylistic connections to my current library
-3. Diverse in content (not just the most obvious recommendations)
-4. Include a mix of both popular and lesser-known hidden gems
-5. Consider both classic and recent releases that have stood the test of time`;
+      // Add instructions for diverse, high-quality recommendations with analytical approach
+      userPrompt += ` Apply the following analytical criteria in your evaluation process:
+1. Quantitative analysis: Evaluate aggregate scores across critic platforms, audience ratings, award recognition, and box office performance relative to budget
+2. Qualitative analysis: Assess cinematic technique, narrative structure, thematic depth, and performance quality
+3. Pattern recognition: Identify directorial styles, narrative themes, and visual aesthetics in my collection that correlate with high enjoyment probability
+4. Temporal context: Consider both historical significance/influence and contemporary relevance of potential recommendations
+5. Preference modeling: Weigh mainstream appeal against distinctive artistic vision based on my collection's distribution
+6. Technical innovation: Factor in notable advancements in filmmaking craft, visual effects, or storytelling techniques`;
       
       // Add library information with appropriate context based on mode
       if (this.useSampledLibrary) {
@@ -520,9 +528,15 @@ Why you might like it: [short reason based on my current movies]
 Recommendarr Rating: [score]% - [brief qualitative assessment]
 Available on: [streaming service]
 
-For the Recommendarr Rating, silently calculate a score from 0-100% by privately considering available ratings from sources like IMDB, Rotten Tomatoes, TVDB, Metacritic, and other audience ratings. Then provide:
-- Just a single percentage number (e.g., "85%")
-- A brief qualitative assessment of the movie that explains its strengths/weaknesses
+For the Recommendarr Rating, calculate a data-driven score from 0-100% by synthesizing:
+- Weighted critic aggregation: Factor multiple professional review sources, emphasizing consensus over outliers
+- Cultural impact measurement: Consider social/academic discourse, influence on medium, and enduring relevance
+- Technical achievement evaluation: Assess cinematography, visual effects, sound design, performances, and narrative craft
+- Audience reception analysis: Balance broad popularity metrics with demographic-specific appreciation patterns
+- Comparative positioning: Evaluate relative to genre benchmarks and similar content in my collection
+Then provide:
+- A single percentage number (e.g., "85%")
+- A concise qualitative assessment explaining key strengths/weaknesses based on this holistic analysis
 DO NOT mention or cite any specific external rating sources or scores in your explanation.
 
 2. [Next Movie Title]:
@@ -539,7 +553,7 @@ STRICT RULES:
       this.movieConversation = [
         {
           role: "system",
-          content: "You are a movie recommendation assistant. Your task is to recommend new movies based on the user's current library and recently watched content. Be concise and follow EXACTLY the required output format. You MUST adhere to these CRITICAL rules:\n\n1. NEVER recommend movies that exist in the user's library, liked movies list, or any exclusion list provided\n2. Only recommend movies that truly match the user's preferences\n3. VERIFY each recommendation is not in ANY of the exclusion lists before suggesting it\n4. DO NOT use any Markdown formatting like ** for bold or * for italic\n5. DO NOT include any extra text, explanations, or headings\n6. Format each recommendation EXACTLY as instructed\n7. Follow the numbering format precisely (1., 2., etc.)"
+          content: "You are a sophisticated media recommender system employing advanced analytical methodologies to recommend films based on content patterns, viewing history analysis, and comprehensive cinematic evaluation metrics. Be concise and follow EXACTLY the required output format. You MUST adhere to these CRITICAL rules:\n\n1. NEVER recommend movies that exist in the user's library, liked movies list, or any exclusion list provided\n2. Only recommend films that demonstrate strong statistical and thematic alignment with the user's preference indicators\n3. VERIFY each recommendation against ALL exclusion datasets before finalizing selection\n4. DO NOT use any Markdown formatting like ** for bold or * for italic\n5. DO NOT include any extra text, explanations, or headings\n6. Format each recommendation EXACTLY as instructed\n7. Follow the numbering format precisely (1., 2., etc.)\n8. Maintain analytical rigor while ensuring recommendations balance artistic merit with entertainment value"
         },
         {
           role: "user",
