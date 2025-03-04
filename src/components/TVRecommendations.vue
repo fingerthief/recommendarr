@@ -1798,13 +1798,10 @@ export default {
     // Check if OpenAI is already configured
     this.openaiConfigured = openAIService.isConfigured();
     
-    // Initialize model selection
-    const currentModel = openAIService.model || 'gpt-3.5-turbo';
-    
-    // Set to custom by default, we'll update once models are fetched
-    this.customModel = currentModel;
-    this.selectedModel = 'custom';
-    this.isCustomModel = true;
+    // Initialize model selection - start with empty value
+    this.selectedModel = '';
+    this.customModel = '';
+    this.isCustomModel = false;
     
     // Add window resize listener to update grid style when screen size changes
     window.addEventListener('resize', this.handleResize);
@@ -1837,12 +1834,24 @@ export default {
     // Fetch models if API is configured
     if (openAIService.isConfigured()) {
       this.fetchModels().then(() => {
-        // Check if the current model is in the fetched models
-        const modelExists = this.modelOptions.some(model => model.id === currentModel);
-        
-        if (modelExists) {
-          // If current model exists in options, select it
-          this.selectedModel = currentModel;
+        // If models were fetched and openAIService has a model, check if it exists in options
+        if (this.modelOptions.length > 0 && openAIService.model) {
+          const currentModel = openAIService.model;
+          const modelExists = this.modelOptions.some(model => model.id === currentModel);
+          
+          if (modelExists) {
+            // If current model exists in options, select it
+            this.selectedModel = currentModel;
+            this.isCustomModel = false;
+          } else {
+            // If not in options but we have a value, set as custom
+            this.customModel = currentModel;
+            this.selectedModel = 'custom';
+            this.isCustomModel = true;
+          }
+        } else if (this.modelOptions.length > 0) {
+          // If no current model but we have options, select first one
+          this.selectedModel = this.modelOptions[0].id;
           this.isCustomModel = false;
         }
       });

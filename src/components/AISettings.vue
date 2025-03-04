@@ -265,7 +265,8 @@
                   :id="model.id" 
                   :value="model.id" 
                   v-model="aiSettings.selectedModel" 
-                  name="model" 
+                  name="model"
+                  @change="saveAISettings(false)"
                 />
                 <label :for="model.id" :title="model.id">{{ model.id }}</label>
               </div>
@@ -1203,6 +1204,7 @@ export default {
       
       try {
         // Configure OpenAI service temporarily with the current settings
+        // This automatically saves the API key and URL to be used later
         await openAIService.configure(
           this.aiSettings.apiKey,
           this.aiSettings.selectedModel || 'gpt-3.5-turbo',
@@ -1225,6 +1227,16 @@ export default {
           if (!this.aiSettings.selectedModel && this.models.length > 0) {
             this.aiSettings.selectedModel = this.models[0].id;
           }
+          
+          // Automatically save settings after successful fetch and model selection
+          if (this.aiSettings.selectedModel) {
+            await this.saveAISettings(false); // Pass false to avoid showing the success message
+            this.saveSuccess = true;
+            this.saveMessage = 'Settings saved when fetching models';
+            setTimeout(() => {
+              this.saveMessage = '';
+            }, 1500);
+          }
         } else {
           this.fetchError = 'No models returned from API';
         }
@@ -1246,7 +1258,7 @@ export default {
       }
     },
     
-    async saveAISettings() {
+    async saveAISettings(showMessage = true) {
       try {
         // Validate the API URL
         if (this.aiSettings.apiUrl) {
@@ -1278,19 +1290,22 @@ export default {
           this.aiSettings.temperature
         );
         
-        this.saveSuccess = true;
-        this.saveMessage = 'AI settings saved successfully!';
+        // Only show success message if requested (default behavior)
+        if (showMessage) {
+          this.saveSuccess = true;
+          this.saveMessage = 'AI settings saved successfully!';
+          this.clearSaveMessage();
+        }
         
         // Emit event to notify parent component
         this.$emit('settings-updated');
-        
-        // Clear message after a delay
-        this.clearSaveMessage();
       } catch (error) {
         console.error('Error saving AI settings:', error);
-        this.saveSuccess = false;
-        this.saveMessage = 'Failed to save AI settings';
-        this.clearSaveMessage();
+        if (showMessage) {
+          this.saveSuccess = false;
+          this.saveMessage = 'Failed to save AI settings';
+          this.clearSaveMessage();
+        }
       }
     },
     
