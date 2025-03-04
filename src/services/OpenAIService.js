@@ -5,8 +5,8 @@ class OpenAIService {
     this.apiKey = '';
     this.baseUrl = 'https://api.openai.com/v1';
     this.model = 'gpt-3.5-turbo';
-    this.maxTokens = 800;
-    this.temperature = 0.5;
+    this.maxTokens = 4000;
+    this.temperature = 0.8;
     this.useSampledLibrary = false;
     this.sampleSize = 20;
     
@@ -117,8 +117,34 @@ class OpenAIService {
    * @param {number} sampleSize - Sample size to use when sampling the library
    */
   async configure(apiKey, model = 'gpt-3.5-turbo', baseUrl = null, maxTokens = null, temperature = null, useSampledLibrary = null, sampleSize = null) {
+    // Check if this is a reset (empty configuration)
+    const isReset = apiKey === '' && (!model || model === '') && (!baseUrl || baseUrl === '');
+    
+    // Set API key - allow null for local models
     this.apiKey = apiKey;
     
+    // If this is a reset request, reset ALL fields to their defaults
+    if (isReset) {
+      this.model = 'gpt-3.5-turbo';
+      this.baseUrl = '';
+      this.apiUrl = '';
+      this.maxTokens = 4000;
+      this.temperature = 0.8;
+      this.useSampledLibrary = false;
+      this.sampleSize = 20;
+      this.tvConversation = [];
+      this.movieConversation = [];
+      
+      // Handle credential deletion
+      try {
+        await credentialsService.deleteCredentials('openai');
+      } catch (error) {
+        console.error('Error deleting OpenAI credentials:', error);
+      }
+      return;
+    }
+    
+    // Normal configuration updates
     if (model) {
       this.model = model;
     }
@@ -162,8 +188,10 @@ class OpenAIService {
    * @returns {boolean} - Whether the service is configured
    */
   isConfigured() {
-    // Check if baseUrl is set, but allow empty apiKey for local models
-    return this.baseUrl !== '' && this.apiKey !== undefined;
+    // Consider the service as not configured if:
+    // - The baseUrl is empty/null/undefined, OR
+    // - The apiKey is undefined (null is OK for local models, empty string is not)
+    return this.baseUrl && this.baseUrl !== '' && this.apiKey !== undefined;
   }
 
   /**

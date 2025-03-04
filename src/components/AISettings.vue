@@ -783,8 +783,8 @@ export default {
         apiUrl: '',
         apiKey: '',
         selectedModel: '',
-        maxTokens: 800,
-        temperature: 0.5
+        maxTokens: 4000,
+        temperature: 0.8
       },
       models: [],
       modelSearch: '',

@@ -969,6 +969,15 @@ export default {
       localStorage.removeItem('tautulliApiKey');
       localStorage.removeItem('openaiApiKey');
       localStorage.removeItem('openaiModel');
+      localStorage.removeItem('aiTemperature');
+      
+      // Also clear model local storage items
+      localStorage.removeItem('previousTVRecommendations');
+      localStorage.removeItem('likedTVRecommendations');
+      localStorage.removeItem('dislikedTVRecommendations');
+      localStorage.removeItem('previousMovieRecommendations');
+      localStorage.removeItem('likedMovieRecommendations');
+      localStorage.removeItem('dislikedMovieRecommendations');
       
       // Delete all credentials from server
       try {
@@ -990,6 +999,14 @@ export default {
       plexService.configure('', '');
       jellyfinService.configure('', '', '');
       tautulliService.configure('', '');
+      
+      // Explicitly reset OpenAI service with all fields cleared
+      const openAIService = await import('./services/OpenAIService').then(module => module.default);
+      await openAIService.configure('', '', '', null, null);
+      
+      // Reset OpenAI service conversation history
+      if (openAIService.tvConversation) openAIService.tvConversation = [];
+      if (openAIService.movieConversation) openAIService.movieConversation = [];
       
       // Reset UI state
       this.sonarrConnected = false;

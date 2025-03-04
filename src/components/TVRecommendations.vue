@@ -2,7 +2,7 @@
   <div class="recommendations">
     <h2>TV Show Recommendations</h2>
     
-    <div v-if="!openaiConfigured" class="setup-section">
+    <div v-if="!openaiConfigured || (openaiConfigured && modelOptions.length === 0 && !selectedModel)" class="setup-section">
       <h3 class="setup-title">AI Connection Required</h3>
       <p class="info-message">To generate TV show recommendations, you need to configure an AI service first.</p>
       <p class="setup-details">You can use OpenAI, local models (like Ollama or LM Studio), or any OpenAI-compatible API.</p>
