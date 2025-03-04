@@ -1,5 +1,5 @@
 # Build stage
-FROM node:20-alpine as build-stage
+FROM node:22-alpine as build-stage
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
@@ -7,11 +7,11 @@ COPY . .
 RUN npm run build
 
 # Production stage - combined frontend and API
-FROM nginx:stable-alpine
+FROM nginx:alpine
 WORKDIR /app
 
-# Install Node.js
-RUN apk add --update nodejs npm
+# Install Node.js 22
+RUN apk add --update nodejs-current npm
 
 # Copy built frontend files
 COPY --from=build-stage /app/dist /usr/share/nginx/html
