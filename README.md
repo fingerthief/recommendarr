@@ -63,7 +63,7 @@ npm run dev
 npm run build
 ```
 
-Visit `http://localhost:8080` in your browser (development) or use a web server to serve the files from the dist directory (production).
+Visit `http://localhost:3030` in your browser (development) or use a web server to serve the files from the dist directory (production).
 
 ## 🔧 Configuration
 
@@ -203,10 +203,8 @@ npm run dev
 npm run build
 ```
 
-<<<<<<< Updated upstream
-The development server will start at http://localhost:8080 (frontend) and http://localhost:3050 (API server).
-=======
-Visit `http://localhost:8080` in your browser (development) or use a web server to serve the files from the dist directory (production).
+The development server will start at http://localhost:3030 (frontend) and http://localhost:3050 (API server).
+Visit `http://localhost:3030` in your browser (development) or use a web server to serve the files from the dist directory (production).
 
 ## 🔧 Configuration
 
@@ -370,8 +368,7 @@ npm run dev
 npm run build
 ```
 
-Development servers: Frontend http://localhost:8080, API http://localhost:3050
->>>>>>> Stashed changes
+Development servers: Frontend http://localhost:3030, API http://localhost:3050
 
 ## 📄 License
 
