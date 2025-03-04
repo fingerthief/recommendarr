@@ -4,8 +4,8 @@ services:
     image: tannermiddleton/recommendarr:latest
     container_name: recommendarr
     ports:
-      - "3030:80"
-      - "3050:3050"
+      - "0.0.0.0:3030:80"
+      - "0.0.0.0:3050:3050"
     environment:
       - NODE_ENV=production
       - DOCKER_ENV=true
