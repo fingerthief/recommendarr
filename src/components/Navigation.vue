@@ -9,20 +9,11 @@
       <div class="nav-menu">
         <button 
           @click="$emit('navigate', 'tv-recommendations')" 
-          :class="{ active: activeTab === 'tv-recommendations' }"
-          class="nav-item"
-        >
-          <span class="nav-icon">📺</span>
-          <span class="nav-text">TV Shows</span>
-        </button>
-        
-        <button 
-          @click="$emit('navigate', 'movie-recommendations')" 
-          :class="{ active: activeTab === 'movie-recommendations' }"
+          :class="{ active: activeTab === 'tv-recommendations' || activeTab === 'movie-recommendations' }"
           class="nav-item"
         >
           <span class="nav-icon">🎬</span>
-          <span class="nav-text">Movies</span>
+          <span class="nav-text">Recommendations</span>
         </button>
         
         <button 
@@ -77,20 +68,11 @@
     <div class="mobile-menu" :class="{ 'open': mobileMenuOpen }">
       <button 
         @click="navigateMobile('tv-recommendations')" 
-        :class="{ active: activeTab === 'tv-recommendations' }"
-        class="mobile-nav-item"
-      >
-        <span class="nav-icon">📺</span>
-        <span>TV Shows</span>
-      </button>
-      
-      <button 
-        @click="navigateMobile('movie-recommendations')" 
-        :class="{ active: activeTab === 'movie-recommendations' }"
+        :class="{ active: activeTab === 'tv-recommendations' || activeTab === 'movie-recommendations' }"
         class="mobile-nav-item"
       >
         <span class="nav-icon">🎬</span>
-        <span>Movies</span>
+        <span>Recommendations</span>
       </button>
       
       <button 

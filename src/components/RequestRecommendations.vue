@@ -1,10 +1,24 @@
 <template>
   <div class="recommendations">
-    <h2>Movie Recommendations</h2>
+    <div class="recommendation-header">
+      <h2>{{ isMovieMode ? 'Movie Recommendations' : 'TV Show Recommendations' }}</h2>
+      <div class="content-type-toggle">
+        <span class="toggle-label" :class="{ 'active': !isMovieMode }">TV Shows</span>
+        <label class="toggle-switch">
+          <input 
+            type="checkbox" 
+            v-model="isMovieMode"
+            @change="saveContentTypePreference"
+          >
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="toggle-label" :class="{ 'active': isMovieMode }">Movies</span>
+      </div>
+    </div>
     
     <div v-if="!openaiConfigured" class="setup-section">
       <h3 class="setup-title">AI Connection Required</h3>
-      <p class="info-message">To generate movie recommendations, you need to configure an AI service first.</p>
+      <p class="info-message">To generate {{ isMovieMode ? 'movie' : 'TV show' }} recommendations, you need to configure an AI service first.</p>
       <p class="setup-details">You can use OpenAI, local models (like Ollama or LM Studio), or any OpenAI-compatible API.</p>
       <button 
         @click="goToSettings" 
@@ -32,336 +46,340 @@
             </div>
             <div class="settings-content" :class="{ 'collapsed': !settingsExpanded && (loading || recommendations.length > 0 || error || recommendationsRequested) }" v-if="true">
               <div class="settings-layout">
-                <div class="settings-left">
-                  <div class="info-section">
-                    <h3 class="info-section-title">Current Configuration</h3>
-                    <div class="model-info">
-                      <div class="model-header">
-                        <span class="current-model">Model:</span>
-                        <button 
-                          @click="fetchModels" 
-                          class="fetch-models-button"
-                          :disabled="fetchingModels"
-                          title="Refresh models from API"
-                        >
-                          <span v-if="fetchingModels" class="loading-icon">⟳</span>
-                          <span v-else>⟳</span>
-                        </button>
-                      </div>
-                      <div class="model-select-container">
-                        <select v-model="selectedModel" @change="updateModel" class="model-select">
-                          <option value="" disabled>{{ modelOptions.length === 0 ? 'No models available' : 'Select a model' }}</option>
-                          <option v-for="model in modelOptions" :key="model.id" :value="model.id">{{ model.id }}</option>
-                          <option value="custom">Custom/Other...</option>
-                        </select>
-                        <div v-if="fetchError" class="fetch-error" @click="goToSettings">{{ fetchError }} <span class="error-link">Click to configure API settings</span></div>
-                        <div class="model-select-custom" v-if="isCustomModel">
-                          <input 
-                            type="text" 
-                            v-model="customModel" 
-                            placeholder="Enter model name" 
-                            class="custom-model-input"
-                            @blur="updateCustomModel"
-                            @keyup.enter="updateCustomModel"
-                          />
-                        </div>
-                      </div>
-                      
-                      <div class="temperature-control">
-                        <label for="temperature-slider">Temperature: <span class="temp-value">{{ temperature.toFixed(1) }}</span></label>
-                        <div class="slider-container">
-                          <div class="temp-labels">
-                            <div class="temp-label-right">Creative</div>
-                            <input 
-                            type="range" 
-                            id="temperature-slider"
-                            v-model.number="temperature"
-                            min="0" 
-                            max="1"
-                            step="0.1"
-                            class="temp-slider"
-                            @change="updateTemperature"
-                          />
-                          <div class="temp-label-left">Precise</div>
-                        </div>
-                          </div>
-                      </div>
-                      
-                      <div class="library-mode-toggle">
-                        <label class="checkbox-label">
-                          <input 
-                            type="checkbox" 
-                            v-model="useSampledLibrary" 
-                            @change="saveLibraryModePreference"
-                          >
-                          Use Sampled Library Mode
-                        </label>
-                        <div class="setting-description">
-                          Samples a subset of your library to reduce token usage while still providing relevant recommendations.
-                        </div>
-                        
-                        <div v-if="useSampledLibrary" class="sample-size-control">
-                          <label for="sampleSizeSlider">Sample size: <span class="count-display">{{ sampleSize }}</span></label>
-                          <div class="slider-container sample-slider-container">
-                            <input 
-                              type="range" 
-                              id="sampleSizeSlider"
-                              v-model.number="sampleSize"
-                              min="5" 
-                              max="50"
-                              class="count-slider"
-                              @change="saveSampleSize"
-                            >
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="history-info">
-                      <span>{{ previousRecommendations.length }} movies in history</span>
+              <div class="settings-left">
+                <div class="info-section">
+                  <h3 class="info-section-title">Current Configuration</h3>
+                  <div class="model-info">
+                    <div class="model-header">
+                      <span class="current-model">Model:</span>
                       <button 
-                        v-if="previousRecommendations.length > 0" 
-                        @click="clearRecommendationHistory" 
-                        class="clear-history-button"
-                        title="Clear recommendation history"
+                        @click="fetchModels" 
+                        class="fetch-models-button"
+                        :disabled="fetchingModels"
+                        title="Refresh models from API"
                       >
-                        Clear History
+                        <span v-if="fetchingModels" class="loading-icon">⟳</span>
+                        <span v-else>⟳</span>
                       </button>
                     </div>
-                  </div>
-                  
-                  <div class="count-selector">
-                    <label for="recommendationsSlider">Number of recommendations: <span class="count-display">{{ numRecommendations }}</span></label>
-                    <div class="slider-container">
-                      <input 
-                        type="range" 
-                        id="recommendationsSlider"
-                        v-model.number="numRecommendations"
-                        min="1" 
-                        max="50"
-                        class="count-slider"
-                        @change="saveRecommendationCount"
-                      >
+                    <div class="model-select-container">
+                      <select v-model="selectedModel" @change="updateModel" class="model-select">
+                        <option value="" disabled>{{ modelOptions.length === 0 ? 'No models available' : 'Select a model' }}</option>
+                        <option v-for="model in modelOptions" :key="model.id" :value="model.id">{{ model.id }}</option>
+                        <option value="custom">Custom/Other...</option>
+                      </select>
+                      <div v-if="fetchError" class="fetch-error" @click="goToSettings">{{ fetchError }} <span class="error-link">Click to configure API settings</span></div>
+                      <div class="model-select-custom" v-if="isCustomModel">
+                        <input 
+                          type="text" 
+                          v-model="customModel" 
+                          placeholder="Enter model name" 
+                          class="custom-model-input"
+                          @blur="updateCustomModel"
+                          @keyup.enter="updateCustomModel"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div class="temperature-control">
+                      <label for="temperature-slider">Temperature: <span class="temp-value">{{ temperature.toFixed(1) }}</span></label>
+                      <div class="slider-container">
+                        <div class="temp-labels">
+                          <div class="temp-label-right">Creative</div>
+                          <input 
+                          type="range" 
+                          id="temperature-slider"
+                          v-model.number="temperature"
+                          min="0" 
+                          max="1"
+                          step="0.1"
+                          class="temp-slider"
+                          @change="updateTemperature"
+                        />
+                        <div class="temp-label-left">Precise</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div class="library-mode-toggle">
+                      <label class="checkbox-label">
+                        <input 
+                          type="checkbox" 
+                          v-model="useSampledLibrary" 
+                          @change="saveLibraryModePreference"
+                        >
+                        Use Sampled Library Mode
+                      </label>
+                      <div class="setting-description">
+                        Samples a subset of your library to reduce token usage while still providing relevant recommendations.
+                      </div>
+                      
+                      <div v-if="useSampledLibrary" class="sample-size-control">
+                        <label for="sampleSizeSlider">Sample size: <span class="count-display">{{ sampleSize }}</span></label>
+                        <div class="slider-container sample-slider-container">
+                          <input 
+                            type="range" 
+                            id="sampleSizeSlider"
+                            v-model.number="sampleSize"
+                            min="5" 
+                            max="50"
+                            class="count-slider"
+                            @change="saveSampleSize"
+                          >
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  
-                  <div class="count-selector">
-                    <label for="columnsSlider">Posters per row: <span class="count-display">{{ columnsCount }}</span></label>
-                    <div class="slider-container">
-                      <input 
-                        type="range" 
-                        id="columnsSlider"
-                        v-model.number="columnsCount"
-                        min="1" 
-                        max="4"
-                        class="count-slider"
-                        @change="saveColumnsCount"
-                      >
-                    </div>
+                  <div class="history-info">
+                    <span>{{ previousRecommendations.length }} shows in history</span>
+                    <button 
+                      v-if="previousRecommendations.length > 0" 
+                      @click="clearRecommendationHistory" 
+                      class="clear-history-button"
+                      title="Clear recommendation history"
+                    >
+                      Clear History
+                    </button>
                   </div>
                 </div>
                 
-                <div class="settings-right">
-                  <div class="genre-selector">
-                    <label>Genre preferences:</label>
-                    <div class="genre-checkboxes">
-                      <div class="genre-checkbox-item" v-for="genre in availableGenres" :key="genre.value">
-                        <label class="checkbox-label">
-                          <input 
-                            type="checkbox" 
-                            :value="genre.value" 
-                            v-model="selectedGenres"
-                            @change="saveGenrePreference"
-                          >
-                          {{ genre.label }}
-                        </label>
-                      </div>
-                      <div v-if="selectedGenres.length > 0" class="selected-genres-summary">
-                        <div class="selected-genres-count">{{ selectedGenres.length }} genre{{ selectedGenres.length > 1 ? 's' : '' }} selected</div>
-                        <button @click="clearGenres" class="clear-genres-button">Clear All</button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="vibe-selector">
-                    <label for="customVibe">Specify a vibe/mood:</label>
-                    <div class="vibe-input-container">
-                      <input 
-                        type="text" 
-                        id="customVibe" 
-                        v-model="customVibe"
-                        @change="saveCustomVibe"
-                        placeholder="e.g., noir thrillers, uplifting, quirky comedies, cult classics"
-                        class="vibe-input"
-                      >
-                      <button 
-                        v-if="customVibe" 
-                        @click="clearCustomVibe" 
-                        class="clear-vibe-button"
-                        title="Clear vibe"
-                      >×</button>
-                    </div>
-                    <div class="setting-description">
-                      Specify the mood or "vibe" you're looking for to guide the recommendations.
-                    </div>
-                  </div>
-                  
-                  <div class="language-selector">
-                    <label for="languageSelect">Content language:</label>
-                    <select 
-                      id="languageSelect" 
-                      v-model="selectedLanguage"
-                      @change="saveLanguagePreference"
-                      class="language-select"
+                <div class="count-selector">
+                  <label for="recommendationsSlider">Number of recommendations: <span class="count-display">{{ numRecommendations }}</span></label>
+                  <div class="slider-container">
+                    <input 
+                      type="range" 
+                      id="recommendationsSlider"
+                      v-model.number="numRecommendations"
+                      min="1" 
+                      max="50"
+                      class="count-slider"
+                      @change="saveRecommendationCount"
                     >
-                      <option value="">Any language</option>
-                      <option v-for="lang in availableLanguages" :key="lang.code" :value="lang.code">
-                        {{ lang.name }}
-                      </option>
-                    </select>
-                    <div class="setting-description">
-                      Select a language to focus recommendations on content in that language.
-                    </div>
                   </div>
-                  
-                  <div v-if="plexConfigured" class="plex-options">
-                    <label>Plex Watch History:</label>
-                    <div class="plex-history-toggle">
-                      <label class="toggle-option">
-                        <input 
-                          type="radio" 
-                          v-model="plexHistoryMode" 
-                          value="all"
-                          @change="savePlexHistoryMode"
-                        >
-                        All watch history
-                      </label>
-                      <label class="toggle-option">
-                        <input 
-                          type="radio" 
-                          v-model="plexHistoryMode" 
-                          value="recent"
-                          @change="savePlexHistoryMode"
-                        >
-                        Recent (30 days)
-                      </label>
-                    </div>
-                    
-                    <div class="plex-only-toggle">
-                      <label class="checkbox-label">
-                        <input 
-                          type="checkbox" 
-                          v-model="plexOnlyMode" 
-                          @change="savePlexOnlyMode"
-                        >
-                        Use only Plex history for recommendations (ignore library)
-                      </label>
-                    </div>
-                    
-                  </div>
-                  
-                  <div v-if="jellyfinConfigured" class="jellyfin-options">
-                    <label>Jellyfin Watch History:</label>
-                    <div class="jellyfin-history-toggle">
-                      <label class="toggle-option">
-                        <input 
-                          type="radio" 
-                          v-model="jellyfinHistoryMode" 
-                          value="all"
-                          @change="saveJellyfinHistoryMode"
-                        >
-                        All watch history
-                      </label>
-                      <label class="toggle-option">
-                        <input 
-                          type="radio" 
-                          v-model="jellyfinHistoryMode" 
-                          value="recent"
-                          @change="saveJellyfinHistoryMode"
-                        >
-                        Recent (30 days)
-                      </label>
-                    </div>
-                    
-                    <div class="jellyfin-only-toggle">
-                      <label class="checkbox-label">
-                        <input 
-                          type="checkbox" 
-                          v-model="jellyfinOnlyMode" 
-                          @change="saveJellyfinOnlyMode"
-                        >
-                        Use only Jellyfin history for recommendations (ignore library)
-                      </label>
-                    </div>
-                    
-                    <button 
-                      class="action-button jellyfin-user-select-button"
-                      @click="$emit('openJellyfinUserSelect')"
-                      style="padding: 6px 12px; font-size: 13px;"
+                </div>
+                
+                <div class="count-selector">
+                  <label for="columnsSlider">Posters per row: <span class="count-display">{{ columnsCount }}</span></label>
+                  <div class="slider-container">
+                    <input 
+                      type="range" 
+                      id="columnsSlider"
+                      v-model.number="columnsCount"
+                      min="1" 
+                      max="4"
+                      class="count-slider"
+                      @change="saveColumnsCount"
                     >
-                      Change User
-                    </button>
-                  </div>
-                  
-                  <div v-if="tautulliConfigured" class="tautulli-options">
-                    <label>Tautulli Watch History:</label>
-                    <div class="tautulli-history-toggle">
-                      <label class="toggle-option">
-                        <input 
-                          type="radio" 
-                          v-model="tautulliHistoryMode" 
-                          value="all"
-                          @change="saveTautulliHistoryMode"
-                        >
-                        All watch history
-                      </label>
-                      <label class="toggle-option">
-                        <input 
-                          type="radio" 
-                          v-model="tautulliHistoryMode" 
-                          value="recent"
-                          @change="saveTautulliHistoryMode"
-                        >
-                        Recent (30 days)
-                      </label>
-                    </div>
-                    
-                    <div class="tautulli-only-toggle">
-                      <label class="checkbox-label">
-                        <input 
-                          type="checkbox" 
-                          v-model="tautulliOnlyMode" 
-                          @change="saveTautulliOnlyMode"
-                        >
-                        Use only Tautulli history for recommendations (ignore library)
-                      </label>
-                    </div>
-                    
-                    <button 
-                      class="action-button tautulli-user-select-button"
-                      @click="$emit('openTautulliUserSelect')"
-                      style="padding: 6px 12px; font-size: 13px; background-color: #7c3aed; color: white;"
-                    >
-                      Change User
-                    </button>
                   </div>
                 </div>
               </div>
               
-              <div class="action-button-container">
-                <button 
-                  @click="getRecommendations" 
-                  :disabled="loading"
-                  class="action-button fun-button"
-                >
-                  <span class="button-content">
-                    <span class="button-icon">🎬</span>
-                    <span class="button-text">{{ loading ? 'Finding Magic in Movies...' : 'Discover Movie Magic!' }}</span>
-                    <span class="button-icon">✨</span>
-                  </span>
-                  <span class="button-glow"></span>
-                </button>
+              <div class="settings-right">
+                <div class="genre-selector">
+                  <label>Genre preferences:</label>
+                  <div class="genre-checkboxes">
+                    <div class="genre-checkbox-item" v-for="genre in availableGenres" :key="genre.value">
+                      <label class="checkbox-label">
+                        <input 
+                          type="checkbox" 
+                          :value="genre.value" 
+                          v-model="selectedGenres"
+                          @change="saveGenrePreference"
+                        >
+                        {{ genre.label }}
+                      </label>
+                    </div>
+                    <div v-if="selectedGenres.length > 0" class="selected-genres-summary">
+                      <div class="selected-genres-count">{{ selectedGenres.length }} genre{{ selectedGenres.length > 1 ? 's' : '' }} selected</div>
+                      <button @click="clearGenres" class="clear-genres-button">Clear All</button>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="vibe-selector">
+                  <label for="customVibe">Specify a vibe/mood:</label>
+                  <div class="vibe-input-container">
+                    <input 
+                      type="text" 
+                      id="customVibe" 
+                      v-model="customVibe"
+                      @change="saveCustomVibe"
+                      placeholder="e.g., cozy mysteries, dark comedy, mind-bending, nostalgic 90s feel"
+                      class="vibe-input"
+                    >
+                    <button 
+                      v-if="customVibe" 
+                      @click="clearCustomVibe" 
+                      class="clear-vibe-button"
+                      title="Clear vibe"
+                    >×</button>
+                  </div>
+                  <div class="setting-description">
+                    Specify the mood or "vibe" you're looking for to guide the recommendations.
+                  </div>
+                </div>
+                
+                <div class="language-selector">
+                  <label for="languageSelect">Content language:</label>
+                  <select 
+                    id="languageSelect" 
+                    v-model="selectedLanguage"
+                    @change="saveLanguagePreference"
+                    class="language-select"
+                  >
+                    <option value="">Any language</option>
+                    <option v-for="lang in availableLanguages" :key="lang.code" :value="lang.code">
+                      {{ lang.name }}
+                    </option>
+                  </select>
+                  <div class="setting-description">
+                    Select a language to focus recommendations on content in that language.
+                  </div>
+                </div>
+                
+                <div v-if="plexConfigured" class="plex-options">
+                  <label>Plex Watch History:</label>
+                  <div class="plex-history-toggle">
+                    <label class="toggle-option">
+                      <input 
+                        type="radio" 
+                        v-model="plexHistoryMode" 
+                        value="all"
+                        @change="savePlexHistoryMode"
+                      >
+                      All watch history
+                    </label>
+                    <label class="toggle-option">
+                      <input 
+                        type="radio" 
+                        v-model="plexHistoryMode" 
+                        value="recent"
+                        @change="savePlexHistoryMode"
+                      >
+                      Recent (30 days)
+                    </label>
+                  </div>
+                  
+                  <div class="plex-only-toggle">
+                    <label class="checkbox-label">
+                      <input 
+                        type="checkbox" 
+                        v-model="plexOnlyMode" 
+                        @change="savePlexOnlyMode"
+                      >
+                      Use only Plex history for recommendations (ignore library)
+                    </label>
+                  </div>
+                  
+                </div>
+                
+                <div v-if="jellyfinConfigured" class="jellyfin-options">
+                  <label>Jellyfin Watch History:</label>
+                  <div class="jellyfin-history-toggle">
+                    <label class="toggle-option">
+                      <input 
+                        type="radio" 
+                        v-model="jellyfinHistoryMode" 
+                        value="all"
+                        @change="saveJellyfinHistoryMode"
+                      >
+                      All watch history
+                    </label>
+                    <label class="toggle-option">
+                      <input 
+                        type="radio" 
+                        v-model="jellyfinHistoryMode" 
+                        value="recent"
+                        @change="saveJellyfinHistoryMode"
+                      >
+                      Recent (30 days)
+                    </label>
+                  </div>
+                  
+                  <div class="jellyfin-only-toggle">
+                    <label class="checkbox-label">
+                      <input 
+                        type="checkbox" 
+                        v-model="jellyfinOnlyMode" 
+                        @change="saveJellyfinOnlyMode"
+                      >
+                      Use only Jellyfin history for recommendations (ignore library)
+                    </label>
+                  </div>
+                  
+                  <button 
+                    class="jellyfin-user-select-button action-button small-button"
+                    @click="$emit('openJellyfinUserSelect')"
+                  >
+                    Change User
+                  </button>
+                </div>
+                
+                <div v-if="tautulliConfigured" class="tautulli-options">
+                  <label>Tautulli Watch History:</label>
+                  <div class="tautulli-history-toggle">
+                    <label class="toggle-option">
+                      <input 
+                        type="radio" 
+                        v-model="tautulliHistoryMode" 
+                        value="all"
+                        @change="saveTautulliHistoryMode"
+                      >
+                      All watch history
+                    </label>
+                    <label class="toggle-option">
+                      <input 
+                        type="radio" 
+                        v-model="tautulliHistoryMode" 
+                        value="recent"
+                        @change="saveTautulliHistoryMode"
+                      >
+                      Recent (30 days)
+                    </label>
+                  </div>
+                  
+                  <div class="tautulli-only-toggle">
+                    <label class="checkbox-label">
+                      <input 
+                        type="checkbox" 
+                        v-model="tautulliOnlyMode" 
+                        @change="saveTautulliOnlyMode"
+                      >
+                      Use only Tautulli history for recommendations (ignore library)
+                    </label>
+                  </div>
+                  
+                  <button 
+                    class="action-button tautulli-user-select-button"
+                    @click="$emit('openTautulliUserSelect')"
+                    style="padding: 6px 12px; font-size: 13px; background-color: #7c3aed; color: white;"
+                  >
+                    Change User
+                  </button>
+                </div>
               </div>
             </div>
+            
+            <div class="action-button-container">
+              <button 
+                @click="getRecommendations" 
+                :disabled="loading"
+                class="action-button fun-button"
+              >
+                <span class="button-content">
+                  <span class="button-icon">{{ isMovieMode ? '🎬' : '📺' }}</span>
+                  <span class="button-text">
+                    {{ loading 
+                      ? (isMovieMode ? 'Finding Movie Treasures...' : 'Finding TV Treasures...') 
+                      : (isMovieMode ? 'Discover Movie Treasures!' : 'Discover TV Treasures!') 
+                    }}
+                  </span>
+                  <span class="button-icon">✨</span>
+                </span>
+                <span class="button-glow"></span>
+              </button>
+            </div>
+          </div>
           </div>
         </div>
       </div>
@@ -456,11 +474,12 @@
                     </button>
                   </div>
                   <button 
-                    @click="requestMovie(rec.title)" 
+                    @click="requestSeries(rec.title)" 
                     class="request-button compact"
-                    :class="{'loading': requestingMovie === rec.title, 'requested': requestStatus[rec.title]?.success}"
-                    :disabled="requestingMovie || requestStatus[rec.title]?.success">
-                    <span v-if="requestingMovie === rec.title">
+                    :class="{'loading': requestingSeries === rec.title, 'requested': requestStatus[rec.title]?.success}"
+                    :disabled="requestingSeries || requestStatus[rec.title]?.success"
+                    :title="isMovieMode ? 'Add to Radarr' : 'Add to Sonarr'">
+                    <span v-if="requestingSeries === rec.title">
                       <div class="small-spinner"></div>
                     </span>
                     <span v-else-if="requestStatus[rec.title]?.success">
@@ -516,7 +535,7 @@
       </div>
       
       <div v-else-if="recommendationsRequested" class="no-recommendations">
-        <p>No recommendations could be generated. Try again or check your movie library.</p>
+        <p>No recommendations could be generated. Try again or check your TV show library.</p>
         <div class="action-button-container">
           <button 
             @click="getRecommendations" 
@@ -528,16 +547,52 @@
         </div>
       </div>
     </div>
-    
-    <!-- Movie Selection Modal -->
-    <div v-if="showMovieModal && currentMovieTitle" class="modal-overlay">
+  </div>
+    <!-- Season Selection Modal for TV Shows -->
+    <div v-if="showSeasonModal && currentSeries" class="modal-overlay">
       <div class="modal-container">
         <div class="modal-header">
-          <h3>Add "{{ currentMovieTitle }}" to Radarr</h3>
-          <button class="modal-close" @click="closeMovieModal">×</button>
+          <h3>Add "{{ currentSeries.title }}" to Sonarr</h3>
+          <button class="modal-close" @click="closeSeasonModal">×</button>
         </div>
         
         <div class="modal-body">
+          <div class="modal-section">
+            <h4>Select seasons to monitor:</h4>
+            
+            <div class="select-all">
+              <label>
+                <input 
+                  type="checkbox" 
+                  :checked="selectedSeasons.length === currentSeries.seasons.length"
+                  @click="toggleAllSeasons"
+                > 
+                Select All Seasons
+              </label>
+            </div>
+            
+            <div class="seasons-grid">
+              <div 
+                v-for="season in currentSeries.seasons" 
+                :key="season.seasonNumber"
+                class="season-item"
+              >
+                <label>
+                  <input 
+                    type="checkbox" 
+                    :value="season.seasonNumber"
+                    :checked="selectedSeasons.includes(season.seasonNumber)"
+                    @click="toggleSeason(season.seasonNumber)"
+                  >
+                  Season {{ season.seasonNumber }}
+                  <span v-if="season.statistics" class="episode-count">
+                    ({{ season.statistics.episodeCount }} episodes)
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
+          
           <div class="modal-section">
             <h4>Quality & Storage Settings:</h4>
             
@@ -577,44 +632,112 @@
         </div>
         
         <div class="modal-footer">
+          <button class="cancel-button" @click="closeSeasonModal">Cancel</button>
+          <button 
+            class="confirm-button" 
+            @click="confirmAddSeries"
+            :disabled="!selectedSeasons.length || loadingFolders"
+          >
+            Add to Sonarr
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Movie Confirmation Modal -->
+    <div v-if="showMovieModal && currentMovie" class="modal-overlay">
+      <div class="modal-container">
+        <div class="modal-header">
+          <h3>Add "{{ currentMovie.title }}" to Radarr</h3>
+          <button class="modal-close" @click="closeMovieModal">×</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="modal-section">
+            <p>You're about to add "{{ currentMovie.title }}" to your Radarr library. Radarr will search for this movie and download it if available.</p>
+          </div>
+          
+          <div class="modal-section">
+            <h4>Quality & Storage Settings:</h4>
+            
+            <div class="loading-indicator" v-if="loadingMovieFolders">
+              <div class="small-spinner"></div>
+              <span>Loading options...</span>
+            </div>
+            
+            <div class="settings-grid" v-else>
+              <div class="setting-item">
+                <label for="movieRootFolder">Save Location:</label>
+                <select 
+                  id="movieRootFolder" 
+                  v-model="selectedMovieRootFolder"
+                  class="setting-select"
+                >
+                  <option v-for="folder in movieRootFolders" :key="folder.id" :value="folder.path">
+                    {{ folder.path }} ({{ formatFreeSpace(folder.freeSpace) }} free)
+                  </option>
+                </select>
+              </div>
+              
+              <div class="setting-item">
+                <label for="movieQualityProfile">Quality Profile:</label>
+                <select 
+                  id="movieQualityProfile" 
+                  v-model="selectedMovieQualityProfile"
+                  class="setting-select"
+                >
+                  <option v-for="profile in movieQualityProfiles" :key="profile.id" :value="profile.id">
+                    {{ profile.name }}
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
           <button class="cancel-button" @click="closeMovieModal">Cancel</button>
           <button 
             class="confirm-button" 
             @click="confirmAddMovie"
-            :disabled="loadingFolders"
+            :disabled="loadingMovieFolders"
           >
             Add to Radarr
           </button>
         </div>
       </div>
     </div>
-  </div>
-</template>
+  </template>
 
 <script>
 import openAIService from '../services/OpenAIService';
 import imageService from '../services/ImageService';
+import sonarrService from '../services/SonarrService';
 import radarrService from '../services/RadarrService';
 import axios from 'axios';
 
 export default {
-  name: 'MovieRecommendations',
+  name: 'TVRecommendations',
   components: {
   },
   props: {
-    movies: {
+    initialMovieMode: {
+      type: Boolean,
+      default: false
+    },
+    series: {
       type: Array,
       required: true
     },
-    radarrConfigured: {
+    sonarrConfigured: {
       type: Boolean,
       required: true
     },
-    recentlyWatchedMovies: {
+    recentlyWatchedShows: {
       type: Array,
       default: () => []
     },
-    jellyfinRecentlyWatchedMovies: {
+    jellyfinRecentlyWatchedShows: {
       type: Array,
       default: () => []
     },
@@ -630,7 +753,7 @@ export default {
       type: Boolean,
       default: false
     },
-    tautulliRecentlyWatchedMovies: {
+    tautulliRecentlyWatchedShows: {
       type: Array,
       default: () => []
     }
@@ -657,6 +780,7 @@ export default {
       loadingPosters: new Map(), // Track which posters are being loaded
       numRecommendations: 5, // Default number of recommendations to request
       columnsCount: 2, // Default number of posters per row
+      isMovieMode: this.initialMovieMode || false, // Toggle between TV shows (false) and movies (true)
       selectedGenres: [], // Multiple genre selections
       customVibe: '', // Custom vibe/mood input from user
       plexHistoryMode: 'all', // 'all' or 'recent'
@@ -667,27 +791,32 @@ export default {
       tautulliOnlyMode: false, // Whether to use only Tautulli history for recommendations
       useSampledLibrary: false, // Whether to use sampled library or full library
       sampleSize: 20, // Default sample size when using sampled library
+      rootFolders: [], // Available Sonarr root folders
+      qualityProfiles: [], // Available Sonarr quality profiles
+      selectedRootFolder: null, // Selected root folder for series
+      selectedQualityProfile: null, // Selected quality profile for series
+      loadingFolders: false, // Loading status for folders
       funLoadingMessages: [
-        "Consulting with film critics from another timeline...",
-        "Analyzing your cinematic taste (the good, the bad, and the guilty pleasures)...",
-        "Searching through director's cuts for hidden gems...",
-        "Calculating the perfect movie night formula...",
-        "Bribing theater projectionists for insider recommendations...",
-        "Converting popcorn into movie suggestions...",
-        "Scouring film festivals you didn't know existed...",
-        "Digging through the vaults for forgotten masterpieces...",
-        "Finding movies that will make you forget to check your phone...",
-        "Asking future you what movies you'll love...",
-        "Computing the perfect movie-to-snack ratio...",
-        "Traveling through movie history to find your next favorite...",
-        "Filtering out films with disappointing endings...",
-        "Calculating the statistical probability of your enjoyment...",
-        "Interviewing fictional movie characters about what to watch next...",
-        "Scanning the multiverse for perfect movie matches...",
-        "Teaching the AI to understand the concept of 'movie magic'...",
-        "Brewing a personalized movie recommendation potion...",
-        "Finding movies that will make you say 'Just one more scene'...",
-        "Cross-referencing your taste with parallel universe versions of you..."
+        "Consulting with TV critics from alternate dimensions...",
+        "Analyzing your taste in shows (don't worry, we won't judge)...",
+        "Sorting through the multiverse for the perfect shows...",
+        "Bribing streaming algorithms for insider information...",
+        "Converting caffeine into recommendations...",
+        "Feeding your watchlist to our recommendation hamsters...",
+        "Searching for shows that won't be cancelled after season 1...",
+        "Scanning for hidden gems buried under streaming algorithms...",
+        "Asking your future self what shows you'll love...",
+        "Calculating the perfect binge-watching schedule...",
+        "Digging through the golden age of television...",
+        "Filtering out shows with disappointing endings...",
+        "Picking shows that will make you say 'just one more episode'...",
+        "Consulting with the TV psychics for your next obsession...",
+        "Brewing a perfect blend of recommendations...",
+        "Decoding the secret sauce of great television...",
+        "Sending scouts to the corners of the streaming universe...",
+        "Finding shows that will make you forget to check your phone...",
+        "Extracting hidden patterns from your viewing history...",
+        "Teaching the AI to understand the concept of 'binge-worthy'..."
       ],
       currentLoadingMessage: "",  // Current displayed loading message
       loadingMessageInterval: null, // For rotating messages
@@ -730,34 +859,62 @@ export default {
         { code: 'pl', name: 'Polish' }
       ],
       selectedLanguage: '',
-      requestingMovie: null, // Track which movie is being requested
-      requestStatus: {}, // Track request status for each movie,
+      requestingSeries: null, // Track which series is being requested
+      requestStatus: {}, // Track request status for each series
       previousRecommendations: [], // Track previous recommendations to avoid duplicates
-      likedRecommendations: [], // Movies that user has liked
-      dislikedRecommendations: [], // Movies that user has disliked
+      likedRecommendations: [], // TV shows that user has liked
+      dislikedRecommendations: [], // TV shows that user has disliked
       maxStoredRecommendations: 500, // Maximum number of previous recommendations to store
+      showSeasonModal: false, // Control visibility of season selection modal
+      currentSeries: null, // Current series being added
+      selectedSeasons: [], // Selected seasons for the current series
+      
+      // Movie modal
+      showMovieModal: false, // Control visibility of movie confirmation modal
+      currentMovie: null, // Current movie being added
+      movieRootFolders: [], // Available Radarr root folders
+      movieQualityProfiles: [], // Available Radarr quality profiles
+      selectedMovieRootFolder: null, // Selected root folder for movie
+      selectedMovieQualityProfile: null, // Selected quality profile for movie
+      loadingMovieFolders: false, // Loading status for movie folders
       selectedModel: '', // Current selected model
       customModel: '', // For custom model input
       isCustomModel: false, // Whether the custom model input is visible
       modelOptions: [], // Available models from API
       fetchingModels: false, // Loading state for fetching models
       fetchError: null, // Error when fetching models
-      temperature: 0.5, // AI temperature parameter
       settingsExpanded: false, // Controls visibility of settings panel
-      
-      // Movie addition modal properties
-      showMovieModal: false, // Visibility of the movie selection modal
-      currentMovieTitle: null, // Current movie title being added
-      rootFolders: [], // Available Radarr root folders
-      qualityProfiles: [], // Available Radarr quality profiles
-      selectedRootFolder: null, // Selected root folder path
-      selectedQualityProfile: null, // Selected quality profile ID
-      loadingFolders: false // Loading state for folders/profiles
+      temperature: 0.5 // AI temperature parameter
     };
   },
   methods: {
     goToSettings() {
       this.$emit('navigate', 'settings');
+    },
+    
+    toggleSettings() {
+      this.settingsExpanded = !this.settingsExpanded;
+      
+      // Add animation classes
+      if (this.settingsExpanded) {
+        // Animate opening
+        const settingsPanel = document.querySelector('.settings-content');
+        if (settingsPanel) {
+          settingsPanel.style.transition = 'max-height 0.3s ease-in, opacity 0.3s ease-in, transform 0.3s ease-in';
+          settingsPanel.style.maxHeight = '2000px';
+          settingsPanel.style.opacity = '1';
+          settingsPanel.style.transform = 'translateY(0)';
+        }
+      } else {
+        // Animate closing
+        const settingsPanel = document.querySelector('.settings-content');
+        if (settingsPanel) {
+          settingsPanel.style.transition = 'max-height 0.3s ease-out, opacity 0.3s ease-out, transform 0.3s ease-out';
+          settingsPanel.style.maxHeight = '0';
+          settingsPanel.style.opacity = '0';
+          settingsPanel.style.transform = 'translateY(-20px)';
+        }
+      }
     },
     // Clean title for consistent poster lookup
     cleanTitle(title) {
@@ -792,8 +949,8 @@ export default {
       this.loadingPosters.set(clean, true);
       
       try {
-        // Try to get the movie poster with cache disabled
-        const posterUrl = await imageService.getPosterForMovie(clean, true);
+        // Try to get the poster with cache disabled
+        const posterUrl = await imageService.getPosterForShow(clean, true);
         
         if (posterUrl) {
           // Update poster in state
@@ -914,9 +1071,16 @@ export default {
       localStorage.setItem('columnsCount', this.columnsCount);
     },
     
+    // Save content type preference to localStorage
+    saveContentTypePreference() {
+      localStorage.setItem('isMovieMode', this.isMovieMode.toString());
+      // Reset recommendations when switching modes
+      this.recommendations = [];
+    },
+    
     // Save genre preferences to localStorage when they change
     saveGenrePreference() {
-      localStorage.setItem('movieGenrePreferences', JSON.stringify(this.selectedGenres));
+      localStorage.setItem('tvGenrePreferences', JSON.stringify(this.selectedGenres));
     },
     
     // Clear all selected genres
@@ -927,7 +1091,7 @@ export default {
     
     // Save custom vibe preference to localStorage
     saveCustomVibe() {
-      localStorage.setItem('movieCustomVibe', this.customVibe);
+      localStorage.setItem('tvCustomVibe', this.customVibe);
     },
     
     // Clear custom vibe input
@@ -938,13 +1102,19 @@ export default {
     
     // Save language preference to localStorage
     saveLanguagePreference() {
-      localStorage.setItem('movieLanguagePreference', this.selectedLanguage);
+      localStorage.setItem('tvLanguagePreference', this.selectedLanguage);
     },
     
     // Save Plex history mode preference
     savePlexHistoryMode() {
       localStorage.setItem('plexHistoryMode', this.plexHistoryMode);
       this.$emit('plexHistoryModeChanged', this.plexHistoryMode);
+    },
+    
+    // Save Jellyfin history mode preference
+    saveJellyfinHistoryMode() {
+      localStorage.setItem('jellyfinHistoryMode', this.jellyfinHistoryMode);
+      this.$emit('jellyfinHistoryModeChanged', this.jellyfinHistoryMode);
     },
     
     // Save Plex only mode preference
@@ -959,12 +1129,6 @@ export default {
       }
       
       this.$emit('plexOnlyModeChanged', this.plexOnlyMode);
-    },
-    
-    // Save Jellyfin history mode preference
-    saveJellyfinHistoryMode() {
-      localStorage.setItem('jellyfinHistoryMode', this.jellyfinHistoryMode);
-      this.$emit('jellyfinHistoryModeChanged', this.jellyfinHistoryMode);
     },
     
     // Save Jellyfin only mode preference
@@ -1017,7 +1181,7 @@ export default {
     
     // Save previous recommendations to localStorage
     savePreviousRecommendations() {
-      localStorage.setItem('previousMovieRecommendations', JSON.stringify(this.previousRecommendations));
+      localStorage.setItem('previousTVRecommendations', JSON.stringify(this.previousRecommendations));
     },
     
     // Add current recommendations to the history
@@ -1047,7 +1211,7 @@ export default {
     // Clear recommendation history
     clearRecommendationHistory() {
       // Ask for confirmation
-      if (confirm(`Clear your history of ${this.previousRecommendations.length} previously recommended movies?`)) {
+      if (confirm(`Clear your history of ${this.previousRecommendations.length} previously recommended shows?`)) {
         this.previousRecommendations = [];
         this.savePreviousRecommendations();
       }
@@ -1192,7 +1356,7 @@ export default {
       }
     },
     
-    // Like a movie recommendation
+    // Like a TV show recommendation
     likeRecommendation(title) {
       // If it's already liked, remove it from liked list (toggle behavior)
       if (this.isLiked(title)) {
@@ -1211,7 +1375,7 @@ export default {
       this.saveLikedDislikedLists();
     },
     
-    // Dislike a movie recommendation
+    // Dislike a TV show recommendation
     dislikeRecommendation(title) {
       // If it's already disliked, remove it from disliked list (toggle behavior)
       if (this.isDisliked(title)) {
@@ -1230,57 +1394,43 @@ export default {
       this.saveLikedDislikedLists();
     },
     
-    // Check if a movie is liked
+    // Check if a TV show is liked
     isLiked(title) {
       return this.likedRecommendations.includes(title);
     },
     
-    // Check if a movie is disliked
+    // Check if a TV show is disliked
     isDisliked(title) {
       return this.dislikedRecommendations.includes(title);
     },
     
     // Save liked and disliked lists to localStorage
     saveLikedDislikedLists() {
-      localStorage.setItem('likedMovieRecommendations', JSON.stringify(this.likedRecommendations));
-      localStorage.setItem('dislikedMovieRecommendations', JSON.stringify(this.dislikedRecommendations));
+      localStorage.setItem('likedTVRecommendations', JSON.stringify(this.likedRecommendations));
+      localStorage.setItem('dislikedTVRecommendations', JSON.stringify(this.dislikedRecommendations));
     },
     
-    toggleSettings() {
-      this.settingsExpanded = !this.settingsExpanded;
-      
-      // Add animation classes
-      if (this.settingsExpanded) {
-        // Animate opening
-        const settingsPanel = document.querySelector('.settings-content');
-        if (settingsPanel) {
-          settingsPanel.style.transition = 'max-height 0.3s ease-in, opacity 0.3s ease-in, transform 0.3s ease-in';
-          settingsPanel.style.maxHeight = '2000px';
-          settingsPanel.style.opacity = '1';
-          settingsPanel.style.transform = 'translateY(0)';
-        }
-      } else {
-        // Animate closing
-        const settingsPanel = document.querySelector('.settings-content');
-        if (settingsPanel) {
-          settingsPanel.style.transition = 'max-height 0.3s ease-out, opacity 0.3s ease-out, transform 0.3s ease-out';
-          settingsPanel.style.maxHeight = '0';
-          settingsPanel.style.opacity = '0';
-          settingsPanel.style.transform = 'translateY(-20px)';
-        }
-      }
-    },
-
     /**
      * Start the rotating loading message animation
      */
     startLoadingMessages() {
-      // Set initial message
-      const baseMessage = this.plexOnlyMode 
-        ? 'Analyzing your Plex watch history...' 
-        : (this.plexConfigured 
-          ? 'Analyzing your movie library and Plex watch history...' 
-          : 'Analyzing your movie library and generating recommendations...');
+      // Set initial message based on content type
+      const contentType = this.isMovieMode ? 'movie' : 'TV show';
+      let baseMessage = `Analyzing your ${contentType} library and generating recommendations...`;
+      
+      if (this.plexOnlyMode) {
+        baseMessage = 'Analyzing your Plex watch history...';
+      } else if (this.jellyfinOnlyMode) {
+        baseMessage = 'Analyzing your Jellyfin watch history...';
+      } else if (this.tautulliOnlyMode) {
+        baseMessage = 'Analyzing your Tautulli watch history...';
+      } else if (this.plexConfigured && this.jellyfinConfigured) {
+        baseMessage = `Analyzing your ${contentType} library, Plex and Jellyfin watch history...`;
+      } else if (this.plexConfigured) {
+        baseMessage = `Analyzing your ${contentType} library and Plex watch history...`;
+      } else if (this.jellyfinConfigured) {
+        baseMessage = `Analyzing your ${contentType} library and Jellyfin watch history...`;
+      }
       
       this.currentLoadingMessage = baseMessage;
       
@@ -1320,14 +1470,18 @@ export default {
     },
     
     async getRecommendations() {
-      // Verify we have a movies list and OpenAI is configured
-      if (!this.radarrConfigured) {
-        this.error = 'You need to connect to Radarr first to get recommendations based on your library.';
+      // Verify we have content and OpenAI is configured
+      const isServiceConfigured = this.isMovieMode 
+        ? radarrService.isConfigured() 
+        : this.sonarrConfigured;
+      
+      if (!isServiceConfigured) {
+        this.error = `You need to connect to ${this.isMovieMode ? 'Radarr' : 'Sonarr'} first to get recommendations based on your library.`;
         return;
       }
       
-      if (this.movies.length === 0) {
-        this.error = 'Your Radarr library is empty. Add some movies to get recommendations.';
+      if (this.series.length === 0) {
+        this.error = `Your ${this.isMovieMode ? 'Radarr' : 'Sonarr'} library is empty. Add some ${this.isMovieMode ? 'movies' : 'TV shows'} to get recommendations.`;
         return;
       }
       
@@ -1367,35 +1521,52 @@ export default {
       }
       
       try {
-        // Get recommendations from OpenAI based on Radarr library with user preferences
         // Convert selectedGenres array to a comma-separated string for the API
         const genreString = this.selectedGenres.length > 0 
           ? this.selectedGenres.join(', ')
           : '';
-          
-        // Get initial recommendations from OpenAI
-        console.log('Using Plex history for recommendations:', this.plexConfigured ? this.recentlyWatchedMovies : 'Not configured');
         
-        this.recommendations = await openAIService.getMovieRecommendations(
-          this.movies, 
-          this.numRecommendations,
-          genreString,
-          this.previousRecommendations,
-          this.likedRecommendations,
-          this.dislikedRecommendations,
-          this.plexOnlyMode ? this.recentlyWatchedMovies : 
-            this.jellyfinOnlyMode ? this.jellyfinRecentlyWatchedMovies :
-            this.tautulliOnlyMode ? this.tautulliRecentlyWatchedMovies :
-            [...this.recentlyWatchedMovies, ...this.jellyfinRecentlyWatchedMovies, ...this.tautulliRecentlyWatchedMovies],
-          this.plexOnlyMode || this.jellyfinOnlyMode || this.tautulliOnlyMode,
-          this.customVibe,
-          this.selectedLanguage
-        );
+        // Get the watch history based on selected mode
+        const watchHistory = this.plexOnlyMode ? this.recentlyWatchedShows : 
+          this.jellyfinOnlyMode ? this.jellyfinRecentlyWatchedShows :
+          this.tautulliOnlyMode ? this.tautulliRecentlyWatchedShows :
+          [...this.recentlyWatchedShows, ...this.jellyfinRecentlyWatchedShows, ...this.tautulliRecentlyWatchedShows];
+        
+        // Get initial recommendations using the appropriate service method based on mode
+        if (this.isMovieMode) {
+          // Use movie recommendations method
+          this.recommendations = await openAIService.getMovieRecommendations(
+            this.series, 
+            this.numRecommendations,
+            genreString,
+            this.previousRecommendations,
+            this.likedRecommendations,
+            this.dislikedRecommendations,
+            watchHistory,
+            this.plexOnlyMode || this.jellyfinOnlyMode || this.tautulliOnlyMode,
+            this.customVibe,
+            this.selectedLanguage
+          );
+        } else {
+          // Use TV show recommendations method
+          this.recommendations = await openAIService.getRecommendations(
+            this.series, 
+            this.numRecommendations,
+            genreString,
+            this.previousRecommendations,
+            this.likedRecommendations,
+            this.dislikedRecommendations,
+            watchHistory,
+            this.plexOnlyMode || this.jellyfinOnlyMode || this.tautulliOnlyMode,
+            this.customVibe,
+            this.selectedLanguage
+          );
+        }
         
         // Update loading message to include genres if selected
         const loadingMessage = document.querySelector('.loading p');
         if (loadingMessage && this.selectedGenres.length > 0) {
-          let source = 'movie library';
+          let source = this.isMovieMode ? 'movie library' : 'TV library';
           if (this.plexOnlyMode) {
             source = 'Plex watch history';
           } else if (this.jellyfinOnlyMode) {
@@ -1403,14 +1574,15 @@ export default {
           } else if (this.tautulliOnlyMode) {
             source = 'Tautulli watch history';
           } else if (this.plexConfigured || this.jellyfinConfigured || this.tautulliConfigured) {
-            source = 'movie library and watch history';
+            source = `${this.isMovieMode ? 'movie' : 'TV'} library and watch history`;
           }
+          
           loadingMessage.textContent = `Analyzing your ${source} and generating ${genreString} recommendations...`;
         }
         
-        // Filter out movies that are already in the Radarr library
+        // Filter out content that is already in the library
         if (this.recommendations.length > 0 && !this.plexOnlyMode && !this.jellyfinOnlyMode && !this.tautulliOnlyMode) {
-          this.recommendations = await this.filterExistingMovies(this.recommendations);
+          this.recommendations = await this.filterExistingShows(this.recommendations);
         }
         
         // If we have fewer recommendations than requested after filtering, get more
@@ -1424,7 +1596,7 @@ export default {
         // Fetch posters for each recommendation
         this.fetchPosters();
       } catch (error) {
-        console.error('Failed to get movie recommendations:', error);
+        console.error('Failed to get recommendations:', error);
         // Provide a more helpful error message based on the error
         if (error.message && error.message.includes('API')) {
           this.error = error.message;
@@ -1444,7 +1616,7 @@ export default {
             this.goToSettings();
           }
         } else {
-          this.error = 'Failed to get recommendations. Please check your AI API settings and try again.';
+          this.error = 'Failed to get recommendations. Please check your AI service settings and try again.';
         }
         this.recommendations = [];
       } finally {
@@ -1455,7 +1627,7 @@ export default {
     },
     
     /**
-     * Get additional movie recommendations when filtering results in fewer than requested
+     * Get additional recommendations when filtering results in fewer than requested
      * @param {number} additionalCount - Number of additional recommendations needed
      * @param {string} genreString - Genre preferences
      * @param {number} [recursionDepth=0] - Current recursion depth to limit excessive API calls
@@ -1463,7 +1635,7 @@ export default {
     async getAdditionalRecommendations(additionalCount, genreString, recursionDepth = 0) {
       if (additionalCount <= 0 || recursionDepth >= 5) return;
       
-      console.log(`Getting ${additionalCount} additional movie recommendations after filtering (recursion depth: ${recursionDepth})`);
+      console.log(`Getting ${additionalCount} additional ${this.isMovieMode ? 'movie' : 'TV show'} recommendations after filtering (recursion depth: ${recursionDepth})`);
       
       // Update base message for the message rotator to use
       const baseMessage = `Getting additional recommendations to match your request...`;
@@ -1478,19 +1650,32 @@ export default {
         // Request more recommendations than we need to account for filtering
         const requestCount = Math.min(additionalCount * 1.5, 20); // Request 50% more, up to 20 max
         
-        // Use the new optimized method for additional recommendations
-        const additionalRecommendations = await openAIService.getAdditionalMovieRecommendations(
-          requestCount,
-          updatedPrevious,
-          genreString,
-          this.customVibe,
-          this.selectedLanguage
-        );
+        // Use the appropriate method based on content type mode
+        let additionalRecommendations;
+        if (this.isMovieMode) {
+          // Use movie recommendations method
+          additionalRecommendations = await openAIService.getAdditionalMovieRecommendations(
+            requestCount,
+            updatedPrevious,
+            genreString,
+            this.customVibe,
+            this.selectedLanguage
+          );
+        } else {
+          // Use TV show recommendations method
+          additionalRecommendations = await openAIService.getAdditionalTVRecommendations(
+            requestCount,
+            updatedPrevious,
+            genreString,
+            this.customVibe,
+            this.selectedLanguage
+          );
+        }
         
         // Filter the additional recommendations
         let filteredAdditional = additionalRecommendations;
         if (filteredAdditional.length > 0 && !this.plexOnlyMode && !this.jellyfinOnlyMode && !this.tautulliOnlyMode) {
-          filteredAdditional = await this.filterExistingMovies(filteredAdditional);
+          filteredAdditional = await this.filterExistingShows(filteredAdditional);
         }
         
         // Combine with existing recommendations
@@ -1507,7 +1692,7 @@ export default {
           }
         }
       } catch (error) {
-        console.error('Error getting additional movie recommendations:', error);
+        console.error('Error getting additional recommendations:', error);
         
         // Count this as one attempt but continue if we're not at the limit
         if (recursionDepth + 1 < 5) {
@@ -1524,19 +1709,19 @@ export default {
     },
     
     /**
-     * Filter out movies that already exist in the Radarr library
-     * @param {Array} recommendations - The recommended movies
+     * Filter out shows that already exist in the Sonarr library
+     * @param {Array} recommendations - The recommended shows
      * @returns {Promise<Array>} - Filtered recommendations
      */
-    async filterExistingMovies(recommendations) {
-      if (!radarrService.isConfigured() || !this.movies.length) {
+    async filterExistingShows(recommendations) {
+      if (!sonarrService.isConfigured() || !this.series.length) {
         return recommendations;
       }
       
       try {
-        // Create a normalized map of existing movie titles in the library
-        const existingMovieTitles = new Set(
-          this.movies.map(movie => movie.title.toLowerCase())
+        // Create a normalized map of existing show titles in the library
+        const existingShowTitles = new Set(
+          this.series.map(show => show.title.toLowerCase())
         );
         
         // Add liked recommendations to the filter set
@@ -1557,16 +1742,16 @@ export default {
         // Filter out recommendations that already exist in the library, liked list, disliked list, or previous recommendations
         const filteredRecommendations = recommendations.filter(rec => {
           const normalizedTitle = rec.title.toLowerCase();
-          return !existingMovieTitles.has(normalizedTitle) && 
+          return !existingShowTitles.has(normalizedTitle) && 
                  !likedRecommendationTitles.has(normalizedTitle) && 
                  !dislikedRecommendationTitles.has(normalizedTitle) && 
                  !previousRecommendationTitles.has(normalizedTitle);
         });
         
-        console.log(`Filtered out ${recommendations.length - filteredRecommendations.length} movies that already exist in the library, liked/disliked lists, or recommendation history`);
+        console.log(`Filtered out ${recommendations.length - filteredRecommendations.length} shows that already exist in the library, liked/disliked lists, or recommendation history`);
         return filteredRecommendations;
       } catch (error) {
-        console.error('Error filtering existing movies:', error);
+        console.error('Error filtering existing shows:', error);
         return recommendations; // Return original list on error
       }
     },
@@ -1584,7 +1769,7 @@ export default {
           // Extract clean title (removing any punctuation at the end)
           const cleanTitle = rec.title.replace(/[:.!?]+$/, '').trim();
           
-          const posterUrl = await imageService.getPosterForMovie(cleanTitle);
+          const posterUrl = await imageService.getPosterForShow(cleanTitle);
           
           if (posterUrl) {
             // Update posters state using Map methods
@@ -1617,12 +1802,12 @@ export default {
       
       return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + sizes[i];
     },
-    
+
     /**
-     * Fetch root folders and quality profiles from Radarr
+     * Fetch root folders and quality profiles from Sonarr
      */
     async fetchFolderAndQualityOptions() {
-      if (!radarrService.isConfigured()) {
+      if (!sonarrService.isConfigured()) {
         return;
       }
       
@@ -1631,8 +1816,8 @@ export default {
       try {
         // Fetch both root folders and quality profiles in parallel
         const [rootFolders, qualityProfiles] = await Promise.all([
-          radarrService.getRootFolders(),
-          radarrService.getQualityProfiles()
+          sonarrService.getRootFolders(),
+          sonarrService.getQualityProfiles()
         ]);
         
         this.rootFolders = rootFolders;
@@ -1647,30 +1832,196 @@ export default {
           this.selectedQualityProfile = qualityProfiles[0].id;
         }
       } catch (error) {
-        console.error('Error fetching Radarr settings:', error);
+        console.error('Error fetching Sonarr settings:', error);
       } finally {
         this.loadingFolders = false;
       }
     },
+
+    /**
+     * Open season selection modal for a series
+     * @param {string} title - The series title to request
+     */
+    async openSeasonSelector(title) {
+      if (!sonarrService.isConfigured()) {
+        this.error = 'Sonarr service is not configured.';
+        return;
+      }
+      
+      try {
+        // Set requesting state for this series
+        this.requestingSeries = title;
+        
+        // Check if series already exists in Sonarr
+        const existingSeries = await sonarrService.findSeriesByTitle(title);
+        
+        if (existingSeries && existingSeries.id) {
+          // Series already exists in library
+          this.requestStatus[title] = {
+            success: true,
+            message: 'Series already exists in your Sonarr library',
+            alreadyExists: true
+          };
+          
+          this.requestingSeries = null;
+          return;
+        }
+        
+        // Look up series info to get seasons
+        const seriesInfo = await sonarrService.lookupSeries(title);
+        
+        // Set current series and seasons for modal
+        this.currentSeries = {
+          title: title,
+          seasons: seriesInfo.seasons
+            .filter(season => season.seasonNumber > 0) // Filter out specials (season 0)
+            .sort((a, b) => a.seasonNumber - b.seasonNumber) // Sort by season number
+        };
+        
+        // Set all seasons selected by default
+        this.selectedSeasons = this.currentSeries.seasons.map(s => s.seasonNumber);
+        
+        // Fetch root folders and quality profiles
+        await this.fetchFolderAndQualityOptions();
+        
+        // Show modal
+        this.showSeasonModal = true;
+        
+        // Clear requesting state since modal is now open
+        this.requestingSeries = null;
+        
+      } catch (error) {
+        console.error(`Error preparing series "${title}" for Sonarr:`, error);
+        
+        // Store error
+        this.requestStatus[title] = {
+          success: false,
+          message: `Error: ${error.message || 'Unknown error'}`
+        };
+        
+        // Clear requesting state
+        this.requestingSeries = null;
+      }
+    },
     
     /**
-     * Open the movie selection modal
+     * Toggle selection of a season
+     * @param {number} seasonNumber - The season number to toggle
+     */
+    toggleSeason(seasonNumber) {
+      const index = this.selectedSeasons.indexOf(seasonNumber);
+      if (index === -1) {
+        this.selectedSeasons.push(seasonNumber);
+      } else {
+        this.selectedSeasons.splice(index, 1);
+      }
+    },
+    
+    /**
+     * Toggle selection of all seasons
+     */
+    toggleAllSeasons() {
+      if (this.selectedSeasons.length === this.currentSeries.seasons.length) {
+        // If all are selected, deselect all
+        this.selectedSeasons = [];
+      } else {
+        // Otherwise, select all
+        this.selectedSeasons = this.currentSeries.seasons.map(s => s.seasonNumber);
+      }
+    },
+    
+    /**
+     * Close the season selection modal
+     */
+    closeSeasonModal() {
+      this.showSeasonModal = false;
+      this.currentSeries = null;
+      this.selectedSeasons = [];
+      this.selectedRootFolder = null;
+      this.selectedQualityProfile = null;
+      this.rootFolders = [];
+      this.qualityProfiles = [];
+    },
+    
+    /**
+     * Request a series to be added to Sonarr with selected seasons and options
+     */
+    async confirmAddSeries() {
+      if (!this.currentSeries || !this.selectedSeasons.length) {
+        return;
+      }
+      
+      try {
+        // Set requesting state
+        this.requestingSeries = this.currentSeries.title;
+        
+        // Close modal
+        this.showSeasonModal = false;
+        
+        // Add series to Sonarr with selected seasons and options
+        const response = await sonarrService.addSeries(
+          this.currentSeries.title, 
+          this.selectedSeasons,
+          this.selectedQualityProfile,
+          this.selectedRootFolder
+        );
+        
+        // Store success response
+        this.requestStatus[this.currentSeries.title] = {
+          success: true,
+          message: 'Successfully added to Sonarr',
+          details: response
+        };
+        
+      } catch (error) {
+        console.error(`Error adding series "${this.currentSeries.title}" to Sonarr:`, error);
+        
+        // Store error
+        this.requestStatus[this.currentSeries.title] = {
+          success: false,
+          message: `Error: ${error.message || 'Unknown error'}`
+        };
+        
+      } finally {
+        // Clear requesting state and current series
+        this.requestingSeries = null;
+        this.currentSeries = null;
+        this.selectedSeasons = [];
+        this.selectedRootFolder = null;
+        this.selectedQualityProfile = null;
+      }
+    },
+    
+    /**
+     * Request a series or movie to be added
+     * @param {string} title - The title to add
+     */
+    requestSeries(title) {
+      if (this.isMovieMode) {
+        this.requestMovie(title);
+      } else {
+        this.openSeasonSelector(title);
+      }
+    },
+    
+    /**
+     * Open movie confirmation modal
      * @param {string} title - The movie title to add
      */
-    async openMovieModal(title) {
+    async requestMovie(title) {
       if (!radarrService.isConfigured()) {
         this.error = 'Radarr service is not configured.';
         return;
       }
       
-      // Set requesting state for this movie
-      this.requestingMovie = title;
-      
       try {
-        // Check if movie already exists in Radarr
-        const existingMovie = await radarrService.findMovieByTitle(title);
+        // Set requesting state for this movie
+        this.requestingSeries = title; // Reuse the same state variable
         
-        if (existingMovie && existingMovie.id) {
+        // Check if movie already exists in Radarr
+        const existingMovie = await radarrService.findExistingMovieByTitle(title);
+        
+        if (existingMovie) {
           // Movie already exists in library
           this.requestStatus[title] = {
             success: true,
@@ -1678,22 +2029,53 @@ export default {
             alreadyExists: true
           };
           
-          // Clear requesting state
-          this.requestingMovie = null;
+          this.requestingSeries = null;
           return;
         }
         
-        // Set current movie title
-        this.currentMovieTitle = title;
+        // Look up movie details
+        const lookupData = await radarrService._apiRequest('/api/v3/movie/lookup', 'GET', null, { term: title });
         
-        // Fetch root folders and quality profiles
-        await this.fetchFolderAndQualityOptions();
+        if (!lookupData || lookupData.length === 0) {
+          throw new Error(`Movie "${title}" not found in Radarr lookup.`);
+        }
         
-        // Show modal
+        // Set current movie data
+        this.currentMovie = {
+          title: title,
+          tmdbId: lookupData[0].tmdbId,
+          year: lookupData[0].year
+        };
+        
+        // Fetch available quality profiles and root folders
+        this.loadingMovieFolders = true;
+        
+        try {
+          const [qualityProfiles, rootFolders] = await Promise.all([
+            radarrService.getQualityProfiles(),
+            radarrService.getRootFolders()
+          ]);
+          
+          this.movieQualityProfiles = qualityProfiles;
+          this.movieRootFolders = rootFolders;
+          
+          // Set default selections
+          if (rootFolders.length > 0) {
+            this.selectedMovieRootFolder = rootFolders[0].path;
+          }
+          
+          if (qualityProfiles.length > 0) {
+            this.selectedMovieQualityProfile = qualityProfiles[0].id;
+          }
+        } finally {
+          this.loadingMovieFolders = false;
+        }
+        
+        // Show the modal
         this.showMovieModal = true;
         
         // Clear requesting state
-        this.requestingMovie = null;
+        this.requestingSeries = null;
         
       } catch (error) {
         console.error(`Error preparing movie "${title}" for Radarr:`, error);
@@ -1705,75 +2087,67 @@ export default {
         };
         
         // Clear requesting state
-        this.requestingMovie = null;
+        this.requestingSeries = null;
       }
     },
     
     /**
-     * Close the movie selection modal
+     * Close the movie confirmation modal
      */
     closeMovieModal() {
       this.showMovieModal = false;
-      this.currentMovieTitle = null;
-      this.selectedRootFolder = null;
-      this.selectedQualityProfile = null;
-      this.rootFolders = [];
-      this.qualityProfiles = [];
+      this.currentMovie = null;
+      this.selectedMovieRootFolder = null;
+      this.selectedMovieQualityProfile = null;
+      this.movieRootFolders = [];
+      this.movieQualityProfiles = [];
     },
     
     /**
-     * Confirm adding the movie to Radarr with selected options
+     * Confirm adding a movie to Radarr
      */
     async confirmAddMovie() {
-      if (!this.currentMovieTitle) {
+      if (!this.currentMovie) {
         return;
       }
       
       try {
         // Set requesting state
-        this.requestingMovie = this.currentMovieTitle;
+        this.requestingSeries = this.currentMovie.title;
         
         // Close modal
         this.showMovieModal = false;
         
         // Add movie to Radarr with selected options
         const response = await radarrService.addMovie(
-          this.currentMovieTitle,
-          this.selectedQualityProfile,
-          this.selectedRootFolder
+          this.currentMovie.title,
+          this.selectedMovieQualityProfile,
+          this.selectedMovieRootFolder
         );
         
         // Store success response
-        this.requestStatus[this.currentMovieTitle] = {
+        this.requestStatus[this.currentMovie.title] = {
           success: true,
           message: 'Successfully added to Radarr',
           details: response
         };
         
       } catch (error) {
-        console.error(`Error adding movie "${this.currentMovieTitle}" to Radarr:`, error);
+        console.error(`Error adding movie "${this.currentMovie.title}" to Radarr:`, error);
         
         // Store error
-        this.requestStatus[this.currentMovieTitle] = {
+        this.requestStatus[this.currentMovie.title] = {
           success: false,
           message: `Error: ${error.message || 'Unknown error'}`
         };
         
       } finally {
         // Clear requesting state and current movie
-        this.requestingMovie = null;
-        this.currentMovieTitle = null;
-        this.selectedRootFolder = null;
-        this.selectedQualityProfile = null;
+        this.requestingSeries = null;
+        this.currentMovie = null;
+        this.selectedMovieRootFolder = null;
+        this.selectedMovieQualityProfile = null;
       }
-    },
-    
-    /**
-     * Request a movie to be added to Radarr (entry point)
-     * @param {string} title - The movie title to add
-     */
-    requestMovie(title) {
-      this.openMovieModal(title);
     },
     
     /**
@@ -1862,8 +2236,14 @@ export default {
       }
     }
     
+    // Restore saved content type preference (movie/TV toggle)
+    const savedMovieMode = localStorage.getItem('isMovieMode');
+    if (savedMovieMode) {
+      this.isMovieMode = savedMovieMode === 'true';
+    }
+    
     // Restore saved genre preferences if they exist
-    const savedGenres = localStorage.getItem('movieGenrePreferences');
+    const savedGenres = localStorage.getItem('tvGenrePreferences');
     if (savedGenres) {
       try {
         this.selectedGenres = JSON.parse(savedGenres);
@@ -1874,13 +2254,13 @@ export default {
     }
     
     // Restore saved custom vibe if it exists
-    const savedVibe = localStorage.getItem('movieCustomVibe');
+    const savedVibe = localStorage.getItem('tvCustomVibe');
     if (savedVibe) {
       this.customVibe = savedVibe;
     }
     
     // Restore saved language preference if it exists
-    const savedLanguage = localStorage.getItem('movieLanguagePreference');
+    const savedLanguage = localStorage.getItem('tvLanguagePreference');
     if (savedLanguage) {
       this.selectedLanguage = savedLanguage;
     }
@@ -1897,35 +2277,35 @@ export default {
       this.plexOnlyMode = savedPlexOnlyMode === 'true';
     }
     
-    // Load previous movie recommendations from localStorage
-    const savedPreviousRecommendations = localStorage.getItem('previousMovieRecommendations');
+    // Load previous TV recommendations from localStorage
+    const savedPreviousRecommendations = localStorage.getItem('previousTVRecommendations');
     if (savedPreviousRecommendations) {
       try {
         this.previousRecommendations = JSON.parse(savedPreviousRecommendations);
       } catch (error) {
-        console.error('Error parsing previous movie recommendations:', error);
+        console.error('Error parsing previous TV recommendations:', error);
         this.previousRecommendations = [];
       }
     }
     
-    // Load liked movie recommendations from localStorage
-    const savedLikedRecommendations = localStorage.getItem('likedMovieRecommendations');
+    // Load liked TV recommendations from localStorage
+    const savedLikedRecommendations = localStorage.getItem('likedTVRecommendations');
     if (savedLikedRecommendations) {
       try {
         this.likedRecommendations = JSON.parse(savedLikedRecommendations);
       } catch (error) {
-        console.error('Error parsing liked movie recommendations:', error);
+        console.error('Error parsing liked TV recommendations:', error);
         this.likedRecommendations = [];
       }
     }
     
-    // Load disliked movie recommendations from localStorage
-    const savedDislikedRecommendations = localStorage.getItem('dislikedMovieRecommendations');
+    // Load disliked TV recommendations from localStorage
+    const savedDislikedRecommendations = localStorage.getItem('dislikedTVRecommendations');
     if (savedDislikedRecommendations) {
       try {
         this.dislikedRecommendations = JSON.parse(savedDislikedRecommendations);
       } catch (error) {
-        console.error('Error parsing disliked movie recommendations:', error);
+        console.error('Error parsing disliked TV recommendations:', error);
         this.dislikedRecommendations = [];
       }
     }
@@ -1948,66 +2328,95 @@ export default {
   padding: 20px;
 }
 
+.recommendation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
 h2 {
   margin-top: 0;
-  margin-bottom: 20px;
+  margin-bottom: 0;
   color: var(--header-color);
   transition: color var(--transition-speed);
 }
 
-.plex-options, .jellyfin-options, .tautulli-options {
-  margin-top: 20px;
-  padding: 15px;
-  background-color: rgba(0, 0, 0, 0.02);
-  border-radius: 8px;
-}
-
-.tautulli-options {
-  background-color: rgba(124, 58, 237, 0.05); /* Light purple background for Tautulli */
-}
-
-.plex-history-toggle, .jellyfin-history-toggle, .tautulli-history-toggle {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.toggle-option {
+.content-type-toggle {
   display: flex;
   align-items: center;
+  background-color: var(--card-bg-color);
+  border-radius: 20px;
+  padding: 4px 10px;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  transition: background-color var(--transition-speed), border-color var(--transition-speed);
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 24px;
   cursor: pointer;
-  margin: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(125, 125, 125, 0.3);
+  border-radius: 34px;
+  transition: background-color .4s;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: .4s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.toggle-label {
   font-size: 14px;
-}
-
-.toggle-option input[type="radio"] {
-  margin-right: 8px;
+  font-weight: 500;
+  color: var(--text-color);
+  opacity: 0.6;
   cursor: pointer;
+  transition: color 0.3s, opacity 0.3s;
 }
 
-.plex-only-toggle, .jellyfin-only-toggle, .tautulli-only-toggle {
-  margin-top: 15px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+.toggle-label.active {
+  color: var(--button-primary-bg, #7c3aed);
+  opacity: 1;
+  font-weight: 600;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
-.jellyfin-user-select-button {
-  margin-top: 15px;
-  width: auto;
-  max-width: 200px;
-  padding: 8px 16px;
-  font-size: 13px;
+input:checked + .toggle-slider {
+  background-color: var(--button-primary-bg, #7c3aed);
 }
 
-.tautulli-user-select-button {
-  margin-top: 15px;
-  width: auto;
-  max-width: 200px;
-  padding: 8px 16px;
-  font-size: 13px;
-  background-color: #7c3aed; /* Tautulli purple color */
-  color: white;
+input:focus + .toggle-slider {
+  box-shadow: 0 0 2px var(--button-primary-bg, #7c3aed);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(16px);
 }
 
 .setup-section {
@@ -2450,23 +2859,6 @@ h2 {
   margin: 0 10px;
 }
 
-.count-selector, .genre-selector {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  box-sizing: border-box;
-  transition: background-color var(--transition-speed), box-shadow var(--transition-speed);
-  padding: 15px;
-  background-color: rgba(0, 0, 0, 0.02);
-  border-radius: 8px;
-}
-
-.count-selector {
-  margin-bottom: 25px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border-color);
-}
-
 .genre-checkboxes {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -2529,6 +2921,55 @@ h2 {
 .clear-genres-button:hover {
   opacity: 1;
   text-decoration: underline;
+}
+
+.count-selector, .genre-selector {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  transition: background-color var(--transition-speed), box-shadow var(--transition-speed);
+  padding: 15px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+}
+
+.count-selector {
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.select-container {
+  position: relative;
+  width: 100%;
+}
+
+select {
+  width: 100%;
+  padding: 10px;
+  appearance: none;
+  background-color: var(--input-bg);
+  color: var(--input-text);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color var(--transition-speed), color var(--transition-speed);
+}
+
+select:hover {
+  border-color: var(--button-primary-bg);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 10px;
+  color: var(--input-text);
 }
 
 .count-selector label, .genre-selector label {
@@ -2646,7 +3087,7 @@ h2 {
   min-width: 300px;
   width: 90%;
   padding: 14px 24px;
-  background: linear-gradient(45deg, #2196F3, #4CAF50);
+  background: linear-gradient(45deg, #673AB7, #9C27B0);
   border-radius: 8px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   overflow: hidden;
@@ -2657,7 +3098,7 @@ h2 {
 .fun-button:hover:not(:disabled) {
   transform: translateY(-2px) scale(1.01);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
-  background: linear-gradient(45deg, #1E88E5, #43A047);
+  background: linear-gradient(45deg, #5E35B1, #8E24AA);
 }
 
 .fun-button:active:not(:disabled) {
@@ -2866,6 +3307,26 @@ h2 {
 @media (max-width: 600px) {
   .card-content {
     flex-direction: column;
+  }
+  
+  .recommendation-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+  
+  .content-type-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .content-type-toggle {
+    justify-content: center;
+    padding: 6px 12px;
+  }
+  
+  .toggle-label {
+    font-size: 13px;
   }
 }
 
@@ -3209,116 +3670,6 @@ h2 {
   text-decoration: underline;
 }
 
-.no-recommendations {
-  text-align: center;
-  padding: 30px;
-  color: var(--text-color);
-  opacity: 0.7;
-  transition: color var(--transition-speed);
-}
-
-.plex-options {
-  margin-top: 20px;
-  padding: 15px;
-  background-color: rgba(0, 0, 0, 0.02);
-  border-radius: 8px;
-}
-
-.plex-history-toggle {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.toggle-option {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  margin: 0;
-  font-size: 14px;
-}
-
-.toggle-option input[type="radio"] {
-  margin-right: 8px;
-  cursor: pointer;
-}
-
-.plex-only-toggle {
-  margin-top: 15px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.request-button {
-  background-color: #2196F3;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.request-button.compact {
-  padding: 5px 10px;
-  font-size: 12px;
-  min-width: 55px;
-  justify-content: center;
-}
-
-@media (max-width: 600px) {
-  .request-button.compact {
-    padding: 8px 12px;
-    font-size: 14px;
-    min-width: 65px;
-  }
-}
-
-.request-button:hover:not(:disabled) {
-  background-color: #1976D2;
-}
-
-.request-button:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.request-button.loading {
-  background-color: #64B5F6;
-}
-
-.request-button.requested {
-  background-color: #4CAF50;
-  cursor: default;
-}
-
-.small-spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-left-color: white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 8px;
-}
-
-.mini-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-left-color: white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  box-sizing: border-box;
-}
 /* Modal Styles */
 .modal-overlay {
   position: fixed;
@@ -3396,6 +3747,40 @@ h2 {
   border-bottom: none;
 }
 
+.select-all {
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.seasons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.season-item {
+  padding: 5px;
+}
+
+.season-item label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.season-item input {
+  margin-right: 8px;
+}
+
+.episode-count {
+  font-size: 12px;
+  color: var(--text-color);
+  opacity: 0.7;
+  margin-left: 5px;
+}
+
 .modal-footer {
   padding: 15px 20px;
   border-top: 1px solid var(--border-color);
@@ -3429,7 +3814,139 @@ h2 {
   cursor: not-allowed;
 }
 
-/* Settings Grid Styles */
+.no-recommendations {
+  text-align: center;
+  padding: 30px;
+  color: var(--text-color);
+  opacity: 0.7;
+  transition: color var(--transition-speed);
+}
+
+.plex-options, .jellyfin-options, .tautulli-options {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+}
+
+.tautulli-options {
+  background-color: rgba(124, 58, 237, 0.05); /* Light purple background for Tautulli */
+}
+
+.plex-history-toggle, .jellyfin-history-toggle, .tautulli-history-toggle {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toggle-option {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  margin: 0;
+  font-size: 14px;
+}
+
+.toggle-option input[type="radio"] {
+  margin-right: 8px;
+  cursor: pointer;
+}
+
+.plex-only-toggle, .jellyfin-only-toggle, .tautulli-only-toggle {
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.jellyfin-user-select-button {
+  margin-top: 15px;
+  width: auto;
+  max-width: 200px;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.tautulli-user-select-button {
+  margin-top: 15px;
+  width: auto;
+  max-width: 200px;
+  padding: 8px 16px;
+  font-size: 14px;
+  background-color: #7c3aed; /* Tautulli purple color */
+  color: white;
+}
+
+.request-button {
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.request-button.compact {
+  padding: 5px 10px;
+  font-size: 12px;
+  min-width: 55px;
+  justify-content: center;
+}
+
+@media (max-width: 600px) {
+  .request-button.compact {
+    padding: 8px 12px;
+    font-size: 14px;
+    min-width: 65px;
+  }
+}
+
+.request-button:hover:not(:disabled) {
+  background-color: #1976D2;
+}
+
+.request-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.request-button.loading {
+  background-color: #64B5F6;
+}
+
+.request-button.requested {
+  background-color: #4CAF50;
+  cursor: default;
+}
+
+.small-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-left-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+.mini-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-left-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  box-sizing: border-box;
+}
+/* Added styles for quality and root folder selection */
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

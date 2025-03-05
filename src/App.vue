@@ -153,12 +153,18 @@
             @openTautulliUserSelect="openTautulliUserSelect"
           />
           
-          <MovieRecommendations 
+          <TVRecommendations 
             v-if="activeTab === 'movie-recommendations'" 
+            :initialMovieMode="true"
+            :series="series"
             :movies="movies"
+            :sonarrConfigured="sonarrConnected"
             :radarrConfigured="radarrConnected"
+            :recentlyWatchedShows="recentlyWatchedShows"
             :recentlyWatchedMovies="recentlyWatchedMovies"
+            :jellyfinRecentlyWatchedShows="jellyfinRecentlyWatchedShows"
             :jellyfinRecentlyWatchedMovies="jellyfinRecentlyWatchedMovies"
+            :tautulliRecentlyWatchedShows="tautulliRecentlyWatchedShows"
             :tautulliRecentlyWatchedMovies="tautulliRecentlyWatchedMovies"
             :plexConfigured="plexConnected"
             :jellyfinConfigured="jellyfinConnected"
@@ -207,8 +213,7 @@ import PlexConnection from './components/PlexConnection.vue'
 import JellyfinConnection from './components/JellyfinConnection.vue'
 import TautulliConnection from './components/TautulliConnection.vue'
 import AppNavigation from './components/Navigation.vue'
-import TVRecommendations from './components/TVRecommendations.vue'
-import MovieRecommendations from './components/MovieRecommendations.vue'
+import TVRecommendations from './components/RequestRecommendations.vue'
 import History from './components/History.vue'
 import AISettings from './components/AISettings.vue'
 import sonarrService from './services/SonarrService'
@@ -228,7 +233,6 @@ export default {
     TautulliConnection,
     AppNavigation,
     TVRecommendations,
-    MovieRecommendations,
     History,
     AISettings
   },
