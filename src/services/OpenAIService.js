@@ -839,6 +839,23 @@ DO NOT mention or cite any specific external rating sources or scores in your ex
    */
   async getFormattedRecommendationsWithConversation(conversation) {
     try {
+      // Check if conversation is getting too large and reset if needed
+      // A typical message limit before hitting payload size issues is around 10-15 messages
+      const MESSAGE_LIMIT = 12; // Reset after this many messages to prevent payload size issues
+      
+      // If conversation exceeds the limit, reset it to just the system message + latest user message
+      if (conversation.length > MESSAGE_LIMIT) {
+        console.log(`Conversation history too large (${conversation.length} messages). Resetting context.`);
+        const systemMessage = conversation[0]; // Keep system prompt
+        const userMessage = conversation[conversation.length - 1]; // Keep latest user message
+        
+        // Reset conversation to just system + latest user message
+        conversation.splice(0, conversation.length);
+        conversation.push(systemMessage, userMessage);
+        
+        console.log(`Conversation reset to ${conversation.length} messages to avoid payload size limits.`);
+      }
+      
       // Import the ApiService dynamically to avoid circular dependency
       const apiService = (await import('./ApiService')).default;
       
