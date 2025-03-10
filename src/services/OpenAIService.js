@@ -9,6 +9,7 @@ class OpenAIService {
     this.temperature = 0.8;
     this.useSampledLibrary = false;
     this.sampleSize = 20;
+    this.useStructuredOutput = true; // Default to using structured output
     
     // Ensure the chat completions endpoint
     this.apiUrl = this.getCompletionsUrl();
@@ -54,6 +55,7 @@ class OpenAIService {
         if (credentials.temperature) this.temperature = parseFloat(credentials.temperature);
         if (credentials.useSampledLibrary !== undefined) this.useSampledLibrary = credentials.useSampledLibrary === true;
         if (credentials.sampleSize) this.sampleSize = parseInt(credentials.sampleSize);
+        if (credentials.useStructuredOutput !== undefined) this.useStructuredOutput = credentials.useStructuredOutput === true;
         
         // Update API URL if baseUrl changed
         this.apiUrl = this.getCompletionsUrl();
@@ -215,8 +217,9 @@ class OpenAIService {
    * @param {number} temperature - Temperature for randomness
    * @param {boolean} useSampledLibrary - Whether to use sampled library for recommendations
    * @param {number} sampleSize - Sample size to use when sampling the library
+   * @param {boolean} useStructuredOutput - Whether to use structured output in API requests
    */
-  async configure(apiKey, model = 'gpt-3.5-turbo', baseUrl = null, maxTokens = null, temperature = null, useSampledLibrary = null, sampleSize = null) {
+  async configure(apiKey, model = 'gpt-3.5-turbo', baseUrl = null, maxTokens = null, temperature = null, useSampledLibrary = null, sampleSize = null, useStructuredOutput = null) {
     // Trim the API key to remove any accidental whitespace
     this.apiKey = apiKey ? apiKey.trim() : '';
     
@@ -248,6 +251,10 @@ class OpenAIService {
       this.sampleSize = sampleSize;
     }
     
+    if (useStructuredOutput !== null) {
+      this.useStructuredOutput = useStructuredOutput;
+    }
+    
     // Store credentials server-side (including model selection as backup)
     await credentialsService.storeCredentials('openai', {
       apiKey: this.apiKey,
@@ -256,7 +263,8 @@ class OpenAIService {
       maxTokens: this.maxTokens,
       temperature: this.temperature,
       useSampledLibrary: this.useSampledLibrary,
-      sampleSize: this.sampleSize
+      sampleSize: this.sampleSize,
+      useStructuredOutput: this.useStructuredOutput
     });
   }
 
@@ -425,7 +433,11 @@ Prioritize shows that:
         userPrompt += `\n\nI've recently watched these shows, so please consider them for better recommendations: ${recentTitles}`;
       }
       
-      userPrompt += `\n\nABSOLUTELY CRITICAL: Before suggesting ANY show, you MUST verify it's not something I already have or dislike.
+      userPrompt += `\n\nABSOLUTELY CRITICAL: Before suggesting ANY show, you MUST verify it's not something I already have or dislike.`;
+      
+      // Include detailed formatting instructions if structured output is disabled
+      if (!this.useStructuredOutput) {
+        userPrompt += `
 
 ⚠️ FORMATTING REQUIREMENTS: YOU MUST FOLLOW THIS EXACT FORMAT WITHOUT ANY DEVIATION ⚠️
 
@@ -436,18 +448,6 @@ Description: [brief description]
 Why you might like it: [short reason based on my current shows] 
 Recommendarr Rating: [score]% - [brief qualitative assessment]
 Available on: [streaming service]
-
-For the Recommendarr Rating, conduct a thorough analysis using multiple methodologies:
-- Statistical analysis: Privately calculate averages, distributions, and trends from rating sources like IMDB, Rotten Tomatoes, TVDB, Metacritic
-- Quantitative analysis: Evaluate objective metrics like episode count, seasons completed, awards won, and viewership numbers
-- Qualitative analysis: Assess writing quality, acting performances, character development, and production values 
-- Comparative analysis: Consider how it ranks among peers in the same genre and time period
-- Cultural impact: Weigh its influence, longevity, and relevance to current audiences
-
-After this analysis, provide:
-- Just a single percentage number (e.g., "85%")
-- A brief assessment that synthesizes these analytical approaches to explain strengths/weaknesses
-DO NOT mention or cite any specific external rating sources or scores in your explanation.
 
 2. [Next Show Title]:
 ...and so on.
@@ -460,12 +460,36 @@ DO NOT mention or cite any specific external rating sources or scores in your ex
 - Do NOT deviate from the format structure in ANY way
 - NEVER recommend any show in my library, liked shows list, or any exclusion list
 - Begin IMMEDIATELY with "1. [Show Title]:" with NO preamble`;
+      }
+      
+      userPrompt += `
 
-      // Initialize conversation with system message
+For the Recommendarr Rating in your recommendations, conduct a thorough analysis using multiple methodologies:
+- Statistical analysis: Privately calculate averages, distributions, and trends from rating sources like IMDB, Rotten Tomatoes, TVDB, Metacritic
+- Quantitative analysis: Evaluate objective metrics like episode count, seasons completed, awards won, and viewership numbers
+- Qualitative analysis: Assess writing quality, acting performances, character development, and production values 
+- Comparative analysis: Consider how it ranks among peers in the same genre and time period
+- Cultural impact: Weigh its influence, longevity, and relevance to current audiences
+
+After this analysis, provide:
+- A percentage score (e.g., "85%")
+- A brief assessment that synthesizes these analytical approaches to explain strengths/weaknesses
+DO NOT mention or cite any specific external rating sources or scores in your explanation.
+
+CRITICAL REQUIREMENTS:
+- DO NOT include any introductions or conclusions in your response
+- NEVER recommend any show in my library, liked shows list, or any exclusion list
+- For each show, provide a title, description, explanation of why I might like it, a rating, and streaming availability`;
+
+      // Initialize conversation with system message with appropriate formatting based on structured output setting
+      const systemContent = this.useStructuredOutput
+        ? "You are a TV show recommendation assistant focused on matching the vibe and feel of shows. You will provide recommendations in a structured format. Rules:\n\n1. NEVER recommend shows from the user's library or exclusion lists - this is absolutely critical\n2. Always double-check recommendations are not in the user's library, liked shows, disliked shows or any previously recommended shows\n3. Recommend shows matching the emotional and stylistic feel of the user's library\n4. NO extra text, introductions or conclusions\n5. For each show, provide a title, description, reasoning why they might like it, a rating percentage with brief assessment, and streaming availability"
+        : "You are a TV show recommendation assistant focused on matching the vibe and feel of shows. Follow the EXACT output format specified - this is critical for the application to function correctly. Rules:\n\n1. NEVER recommend shows from the user's library or exclusion lists - this is absolutely critical\n2. Always double-check recommendations are not in the user's library, liked shows, disliked shows or any previously recommended shows\n3. Recommend shows matching the emotional and stylistic feel of the user's library\n4. NO Markdown formatting\n5. NO extra text, introductions or conclusions\n6. Format recommendations EXACTLY as instructed\n7. Begin IMMEDIATELY with '1. [Show Title]:' with NO preamble\n8. Use ONLY these section titles: 'Description:', 'Why you might like it:', 'Recommendarr Rating:', and 'Available on:'";
+      
       this.tvConversation = [
         {
           role: "system",
-          content: "You are a TV show recommendation assistant focused on matching the vibe and feel of shows. Follow the EXACT output format specified - this is critical for the application to function correctly. Rules:\n\n1. NEVER recommend shows from the user's library or exclusion lists - this is absolutely critical\n2. Always double-check recommendations are not in the user's library, liked shows, disliked shows or any previously recommended shows\n3. Recommend shows matching the emotional and stylistic feel of the user's library\n4. NO Markdown formatting\n5. NO extra text, introductions or conclusions\n6. Format recommendations EXACTLY as instructed\n7. Begin IMMEDIATELY with '1. [Show Title]:' with NO preamble\n8. Use ONLY these section titles: 'Description:', 'Why you might like it:', 'Recommendarr Rating:', and 'Available on:'"
+          content: systemContent
         },
         {
           role: "user",
@@ -668,7 +692,11 @@ Prioritize movies that:
         userPrompt += `\n\nI've recently watched these movies, so please consider them for better recommendations: ${recentTitles}`;
       }
       
-      userPrompt += `\n\nABSOLUTELY CRITICAL: Before suggesting ANY movie, you MUST verify it's not something I already have or dislike.
+      userPrompt += `\n\nABSOLUTELY CRITICAL: Before suggesting ANY movie, you MUST verify it's not something I already have or dislike.`;
+      
+      // Include detailed formatting instructions if structured output is disabled
+      if (!this.useStructuredOutput) {
+        userPrompt += `
 
 ⚠️ FORMATTING REQUIREMENTS: YOU MUST FOLLOW THIS EXACT FORMAT WITHOUT ANY DEVIATION ⚠️
 
@@ -679,18 +707,6 @@ Description: [brief description]
 Why you might like it: [short reason based on my current movies] 
 Recommendarr Rating: [score]% - [brief qualitative assessment]
 Available on: [streaming service]
-
-For the Recommendarr Rating, conduct a thorough analysis using multiple methodologies:
-- Statistical analysis: Privately calculate averages, distributions, and trends from rating sources like IMDB, Rotten Tomatoes, Metacritic
-- Quantitative analysis: Evaluate objective metrics like box office performance, budget-to-return ratio, and awards received
-- Qualitative analysis: Assess cinematic elements including direction, screenplay, performances, and technical aspects
-- Comparative analysis: Consider how it ranks among peers in the same genre and time period  
-- Cultural impact: Weigh its influence, longevity, and relevance to current audiences
-
-After this analysis, provide:
-- Just a single percentage number (e.g., "85%")
-- A brief assessment that synthesizes these analytical approaches to explain strengths/weaknesses
-DO NOT mention or cite any specific external rating sources or scores in your explanation.
 
 2. [Next Movie Title]:
 ...and so on.
@@ -703,12 +719,36 @@ DO NOT mention or cite any specific external rating sources or scores in your ex
 - Do NOT deviate from the format structure in ANY way
 - NEVER recommend any movie in my library, liked movies list, or any exclusion list
 - Begin IMMEDIATELY with "1. [Movie Title]:" with NO preamble`;
+      }
+      
+      userPrompt += `
 
-      // Initialize conversation with system message
+For the Recommendarr Rating in your recommendations, conduct a thorough analysis using multiple methodologies:
+- Statistical analysis: Privately calculate averages, distributions, and trends from rating sources like IMDB, Rotten Tomatoes, Metacritic
+- Quantitative analysis: Evaluate objective metrics like box office performance, budget-to-return ratio, and awards received
+- Qualitative analysis: Assess cinematic elements including direction, screenplay, performances, and technical aspects
+- Comparative analysis: Consider how it ranks among peers in the same genre and time period  
+- Cultural impact: Weigh its influence, longevity, and relevance to current audiences
+
+After this analysis, provide:
+- A percentage score (e.g., "85%")
+- A brief assessment that synthesizes these analytical approaches to explain strengths/weaknesses
+DO NOT mention or cite any specific external rating sources or scores in your explanation.
+
+CRITICAL REQUIREMENTS:
+- DO NOT include any introductions or conclusions in your response
+- NEVER recommend any movie in my library, liked movies list, or any exclusion list
+- For each movie, provide a title, description, explanation of why I might like it, a rating, and streaming availability`;
+
+      // Initialize conversation with system message with appropriate formatting based on structured output setting
+      const systemContent = this.useStructuredOutput
+        ? "You are a movie recommendation assistant focused on matching the emotional and cinematic qualities of films. You will provide recommendations in a structured format. Rules:\n\n1. NEVER recommend movies from the user's library or exclusion lists - this is absolutely critical\n2. Always double-check recommendations are not in the user's library, liked movies, disliked movies or any previously recommended movies\n3. Recommend movies matching the mood, style, and emotional resonance of the user's library\n4. NO extra text, introductions or conclusions\n5. For each movie, provide a title, description, reasoning why they might like it, a rating percentage with brief assessment, and streaming availability"
+        : "You are a movie recommendation assistant focused on matching the emotional and cinematic qualities of films. Follow the EXACT output format specified - this is critical for the application to function correctly. Rules:\n\n1. NEVER recommend movies from the user's library or exclusion lists - this is absolutely critical\n2. Always double-check recommendations are not in the user's library, liked movies, disliked movies or any previously recommended movies\n3. Recommend movies matching the mood, style, and emotional resonance of the user's library\n4. NO Markdown formatting\n5. NO extra text, introductions or conclusions\n6. Format recommendations EXACTLY as instructed\n7. Begin IMMEDIATELY with '1. [Movie Title]:' with NO preamble\n8. Use ONLY these section titles: 'Description:', 'Why you might like it:', 'Recommendarr Rating:', and 'Available on:'";
+      
       this.movieConversation = [
         {
           role: "system",
-          content: "You are a movie recommendation assistant focused on matching the emotional and cinematic qualities of films. Follow the EXACT output format specified - this is critical for the application to function correctly. Rules:\n\n1. NEVER recommend movies from the user's library or exclusion lists - this is absolutely critical\n2. Always double-check recommendations are not in the user's library, liked movies, disliked movies or any previously recommended movies\n3. Recommend movies matching the mood, style, and emotional resonance of the user's library\n4. NO Markdown formatting\n5. NO extra text, introductions or conclusions\n6. Format recommendations EXACTLY as instructed\n7. Begin IMMEDIATELY with '1. [Movie Title]:' with NO preamble\n8. Use ONLY these section titles: 'Description:', 'Why you might like it:', 'Recommendarr Rating:', and 'Available on:'"
+          content: systemContent
         },
         {
           role: "user",
@@ -986,15 +1026,49 @@ DO NOT mention or cite any specific external rating sources or scores in your ex
       
       headers['Content-Type'] = 'application/json';
       
-      // Prepare the request data
+      // Prepare the base request data
       const requestData = {
         model: this.model,
         messages: conversation,
         temperature: this.temperature,
-        max_tokens: this.maxTokens,
-        presence_penalty: 0.1,  // Slightly discourage repetition
-        frequency_penalty: 0.1  // Slightly encourage diversity
+        max_tokens: this.maxTokens
       };
+      
+      // Add structured output format if enabled
+      if (this.useStructuredOutput) {
+        console.log('Using structured output format for API request');
+        requestData.response_format = {
+          type: "json_schema",
+          json_schema: {
+            name: "media_recommendations",
+            schema: {
+              type: "object",
+              properties: {
+                recommendations: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      title: { type: "string" },
+                      description: { type: "string" },
+                      reasoning: { type: "string" },
+                      rating: { type: "string" },
+                      streaming: { type: "string" }
+                    },
+                    required: ["title", "description", "reasoning", "rating", "streaming"],
+                    additionalProperties: false
+                  }
+                }
+              },
+              required: ["recommendations"],
+              additionalProperties: false
+            },
+            strict: true
+          }
+        };
+      } else {
+        console.log('Using legacy format for API request (structured output disabled)');
+      }
       
       let response;
       const axios = (await import('axios')).default;
@@ -1032,16 +1106,87 @@ DO NOT mention or cite any specific external rating sources or scores in your ex
         throw new Error('The AI API returned an unexpected response format. Please check your API key and endpoint configuration.');
       }
       
+      // Get the structured JSON response
+      const responseContent = response.data.choices[0].message.content;
+      console.log("Response content type:", typeof responseContent);
+      
+      let parsedRecommendations = [];
+      
+      // Parse the JSON response (if it's a string) or use it directly (if it's already an object)
+      try {
+        let recommendationsData;
+        
+        // Handle different response formats
+        if (typeof responseContent === 'string') {
+          // Log the first part of the content to help debug
+          console.log("Response content preview:", responseContent.substring(0, 100));
+          
+          // Clean the response if needed - some models might return invalid JSON with comments or prefixes
+          let cleanedContent = responseContent.trim();
+          
+          // If response starts with markdown code block indicators, clean them up
+          if (cleanedContent.startsWith('```json')) {
+            cleanedContent = cleanedContent.replace(/^```json\n/, '').replace(/\n```$/, '');
+          } else if (cleanedContent.startsWith('```')) {
+            cleanedContent = cleanedContent.replace(/^```\n/, '').replace(/\n```$/, '');
+          }
+          
+          // Try to parse the JSON
+          try {
+            recommendationsData = JSON.parse(cleanedContent);
+          } catch (initialParseError) {
+            console.warn('Initial JSON parse failed, attempting fallback cleanup:', initialParseError);
+            
+            // Handle case where content might have strange characters at start
+            if (cleanedContent.length > 10) {
+              // Try cleaning by finding first { and last }
+              const firstBrace = cleanedContent.indexOf('{');
+              const lastBrace = cleanedContent.lastIndexOf('}');
+              
+              if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+                try {
+                  const extractedJson = cleanedContent.substring(firstBrace, lastBrace + 1);
+                  recommendationsData = JSON.parse(extractedJson);
+                  console.log('Successfully parsed JSON after extracting braces');
+                } catch (extractError) {
+                  throw new Error(`Failed to parse extracted JSON: ${extractError.message}`);
+                }
+              } else {
+                throw new Error('Could not find matching JSON braces in response');
+              }
+            } else {
+              throw initialParseError;
+            }
+          }
+        } else {
+          // If it's already an object, use it directly
+          recommendationsData = responseContent;
+        }
+        
+        // Extract recommendations from the structured response
+        if (recommendationsData && recommendationsData.recommendations) {
+          parsedRecommendations = recommendationsData.recommendations.map(rec => ({
+            ...rec,
+            // Add fullText for backward compatibility
+            fullText: `${rec.title}:\nDescription: ${rec.description}\nWhy you might like it: ${rec.reasoning}\nRecommendarr Rating: ${rec.rating}\nAvailable on: ${rec.streaming}`
+          }));
+        } else {
+          console.warn('Response is missing recommendations array:', recommendationsData);
+        }
+      } catch (parseError) {
+        console.error('Error parsing structured response:', parseError);
+        console.log('Falling back to legacy parsing for content:', responseContent);
+        // Fall back to legacy parsing if JSON parsing fails
+        parsedRecommendations = this.parseRecommendations(responseContent);
+      }
+      
       // Add the assistant's response to the conversation history
       conversation.push({
         role: "assistant",
-        content: response.data.choices[0].message.content
+        content: responseContent
       });
       
-      // Parse the recommendations from the response
-      let recommendations = this.parseRecommendations(response.data.choices[0].message.content);
-      
-      return recommendations;
+      return parsedRecommendations;
     } catch (error) {
       console.error('Error getting recommendations with conversation:', error);
       throw error;
@@ -1095,14 +1240,49 @@ DO NOT mention or cite any specific external rating sources or scores in your ex
         response = await this.sendChunkedMessages(systemMessage, userMessage, headers);
       } else {
         // We can send in a single request
+        // Prepare the base request data
         const requestData = {
           model: this.model,
           messages: messages,
           temperature: this.temperature,
-          max_tokens: this.maxTokens,
-          presence_penalty: 0.1,  // Slightly discourage repetition
-          frequency_penalty: 0.1  // Slightly encourage diversity
+          max_tokens: this.maxTokens
         };
+        
+        // Add structured output format if enabled
+        if (this.useStructuredOutput) {
+          console.log('Using structured output format for API request');
+          requestData.response_format = {
+            type: "json_schema",
+            json_schema: {
+              name: "media_recommendations",
+              schema: {
+                type: "object",
+                properties: {
+                  recommendations: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        title: { type: "string" },
+                        description: { type: "string" },
+                        reasoning: { type: "string" },
+                        rating: { type: "string" },
+                        streaming: { type: "string" }
+                      },
+                      required: ["title", "description", "reasoning", "rating", "streaming"],
+                      additionalProperties: false
+                    }
+                  }
+                },
+                required: ["recommendations"],
+                additionalProperties: false
+              },
+              strict: true
+            }
+          };
+        } else {
+          console.log('Using legacy format for API request (structured output disabled)');
+        }
         
         // Try proxy first, then fall back to direct request
         try {
@@ -1135,11 +1315,82 @@ DO NOT mention or cite any specific external rating sources or scores in your ex
         throw new Error('The API returned an unexpected response format. Please check your API key and endpoint configuration.');
       }
       
-      // Parse the recommendations from the response
-      let recommendations = this.parseRecommendations(response.data.choices[0].message.content);
+      // Get the structured JSON response
+      const responseContent = response.data.choices[0].message.content;
+      console.log("Response content type:", typeof responseContent);
+      
+      let parsedRecommendations = [];
+      
+      // Parse the JSON response (if it's a string) or use it directly (if it's already an object)
+      try {
+        let recommendationsData;
+        
+        // Handle different response formats
+        if (typeof responseContent === 'string') {
+          // Log the first part of the content to help debug
+          console.log("Response content preview:", responseContent.substring(0, 100));
+          
+          // Clean the response if needed - some models might return invalid JSON with comments or prefixes
+          let cleanedContent = responseContent.trim();
+          
+          // If response starts with markdown code block indicators, clean them up
+          if (cleanedContent.startsWith('```json')) {
+            cleanedContent = cleanedContent.replace(/^```json\n/, '').replace(/\n```$/, '');
+          } else if (cleanedContent.startsWith('```')) {
+            cleanedContent = cleanedContent.replace(/^```\n/, '').replace(/\n```$/, '');
+          }
+          
+          // Try to parse the JSON
+          try {
+            recommendationsData = JSON.parse(cleanedContent);
+          } catch (initialParseError) {
+            console.warn('Initial JSON parse failed, attempting fallback cleanup:', initialParseError);
+            
+            // Handle case where content might have strange characters at start
+            if (cleanedContent.length > 10) {
+              // Try cleaning by finding first { and last }
+              const firstBrace = cleanedContent.indexOf('{');
+              const lastBrace = cleanedContent.lastIndexOf('}');
+              
+              if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+                try {
+                  const extractedJson = cleanedContent.substring(firstBrace, lastBrace + 1);
+                  recommendationsData = JSON.parse(extractedJson);
+                  console.log('Successfully parsed JSON after extracting braces');
+                } catch (extractError) {
+                  throw new Error(`Failed to parse extracted JSON: ${extractError.message}`);
+                }
+              } else {
+                throw new Error('Could not find matching JSON braces in response');
+              }
+            } else {
+              throw initialParseError;
+            }
+          }
+        } else {
+          // If it's already an object, use it directly
+          recommendationsData = responseContent;
+        }
+        
+        // Extract recommendations from the structured response
+        if (recommendationsData && recommendationsData.recommendations) {
+          parsedRecommendations = recommendationsData.recommendations.map(rec => ({
+            ...rec,
+            // Add fullText for backward compatibility
+            fullText: `${rec.title}:\nDescription: ${rec.description}\nWhy you might like it: ${rec.reasoning}\nRecommendarr Rating: ${rec.rating}\nAvailable on: ${rec.streaming}`
+          }));
+        } else {
+          console.warn('Response is missing recommendations array:', recommendationsData);
+        }
+      } catch (parseError) {
+        console.error('Error parsing structured response:', parseError);
+        console.log('Falling back to legacy parsing for content:', responseContent);
+        // Fall back to legacy parsing if JSON parsing fails
+        parsedRecommendations = this.parseRecommendations(responseContent);
+      }
       
       // We'll add a verification check later when we have context about existing items
-      return recommendations;
+      return parsedRecommendations;
     } catch (error) {
       console.error('Error getting recommendations from AI:', error);
       throw error;
@@ -1184,7 +1435,7 @@ DO NOT mention or cite any specific external rating sources or scores in your ex
         model: this.model,
         messages: conversationMessages,
         temperature: this.temperature,
-        max_tokens: 50,  // Small token limit since we just need acknowledgment
+        max_tokens: 50  // Small token limit since we just need acknowledgment
       };
       
       // Try to send via proxy first, then fall back to direct request
@@ -1219,14 +1470,49 @@ DO NOT mention or cite any specific external rating sources or scores in your ex
       content: `Final part ${chunks.length}/${chunks.length}: ${chunks[chunks.length - 1]}\n\nThat's the complete request. Please provide recommendations based on all parts of my message.`
     });
     
+    // Prepare the base request data for final chunk
     const finalRequestData = {
       model: this.model,
       messages: conversationMessages,
       temperature: this.temperature,
-      max_tokens: this.maxTokens,
-      presence_penalty: 0.1,
-      frequency_penalty: 0.1
+      max_tokens: this.maxTokens
     };
+    
+    // Add structured output format if enabled
+    if (this.useStructuredOutput) {
+      console.log('Using structured output format for final chunked request');
+      finalRequestData.response_format = {
+        type: "json_schema",
+        json_schema: {
+          name: "media_recommendations",
+          schema: {
+            type: "object",
+            properties: {
+              recommendations: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    description: { type: "string" },
+                    reasoning: { type: "string" },
+                    rating: { type: "string" },
+                    streaming: { type: "string" }
+                  },
+                  required: ["title", "description", "reasoning", "rating", "streaming"],
+                  additionalProperties: false
+                }
+              }
+            },
+            required: ["recommendations"],
+            additionalProperties: false
+          },
+          strict: true
+        }
+      };
+    } else {
+      console.log('Using legacy format for final chunked request (structured output disabled)');
+    }
     
     // Send final chunk using proxy first, then fall back to direct request
     try {

@@ -150,6 +150,21 @@
                           </div>
                         </div>
                       </div>
+
+                      <div class="experimental-toggle">
+                        <label class="checkbox-label">
+                          <input 
+                            type="checkbox" 
+                            v-model="useStructuredOutput" 
+                            @change="saveStructuredOutputPreference"
+                          >
+                          Use Structured Output (Experimental)
+                        </label>
+                        <div class="setting-description">
+                          Uses OpenAI's JSON schema feature for more reliable and consistent recommendations.
+                          <span class="experimental-badge">BETA</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div class="history-info">
@@ -843,9 +858,6 @@
                       {{ extractScore(rec.rating) }}%
                     </div>
                   </div>
-                  <div class="rating-details">
-                    {{ extractRatingDetails(rec.rating) }}
-                  </div>
                 </div>
                 
                 
@@ -1234,6 +1246,7 @@ export default {
       localMovies: [], // Local copy of movies prop to avoid direct mutation
       useSampledLibrary: false, // Whether to use sampled library or full library
       sampleSize: 20, // Default sample size when using sampled library
+      useStructuredOutput: true, // Whether to use OpenAI's structured output feature
       rootFolders: [], // Available Sonarr root folders
       qualityProfiles: [], // Available Sonarr quality profiles
       selectedRootFolder: null, // Selected root folder for series
@@ -1526,48 +1539,8 @@ export default {
       return '??';
     },
     
-    // Extract the details portion of the rating
-    extractRatingDetails(ratingText) {
-      if (!ratingText || ratingText === 'N/A') {
-        return 'No rating information available';
-      }
-      
-      // Try various patterns to extract details after the rating
-      
-      // Pattern 1: "85% - Details here"
-      let detailsMatch = ratingText.match(/\d+%\s*-\s*(.*)/);
-      if (detailsMatch && detailsMatch[1]) {
-        return detailsMatch[1].trim();
-      }
-      
-      // Pattern 2: "85/100 - Details here"
-      detailsMatch = ratingText.match(/\d+\s*\/\s*100\s*-\s*(.*)/);
-      if (detailsMatch && detailsMatch[1]) {
-        return detailsMatch[1].trim();
-      }
-      
-      // Pattern 3: "8.5/10 - Details here"
-      detailsMatch = ratingText.match(/\d+(?:\.\d+)?\s*\/\s*10\s*-\s*(.*)/);
-      if (detailsMatch && detailsMatch[1]) {
-        return detailsMatch[1].trim();
-      }
-      
-      // Pattern 4: Look for a colon followed by details
-      detailsMatch = ratingText.match(/:\s*(.*)/);
-      if (detailsMatch && detailsMatch[1]) {
-        return detailsMatch[1].trim();
-      }
-      
-      // If no specific pattern matches, remove any numbers and rating symbols
-      const cleanedText = ratingText.replace(/(\d+%|\d+\/\d+|\d+\.\d+\/\d+|\d+)/, '').trim();
-      if (cleanedText && cleanedText !== ratingText) {
-        // If we removed something and have text left, return that
-        return cleanedText.replace(/^[-:\s]+/, '').trim();
-      }
-      
-      // Fall back to the original text if no patterns match
-      return ratingText;
-    },
+    // This method has been removed as we no longer display rating details
+    // The extractScore method is still used to get the percentage value
     
     // Determine CSS class for Recommendarr Rating
     getScoreClass(scoreText) {
@@ -2367,6 +2340,39 @@ export default {
         // Fallback to localStorage
         localStorage.setItem('librarySampleSize', this.sampleSize.toString());
         openAIService.sampleSize = this.sampleSize;
+      }
+    },
+    
+    // Save structured output preference
+    async saveStructuredOutputPreference() {
+      try {
+        console.log('Saving structured output preference:', this.useStructuredOutput);
+        await apiService.saveSettings({ useStructuredOutput: this.useStructuredOutput });
+        
+        // Also save to localStorage as a backup
+        localStorage.setItem('useStructuredOutput', this.useStructuredOutput.toString());
+        
+        // Set the useStructuredOutput property on the OpenAIService
+        openAIService.useStructuredOutput = this.useStructuredOutput;
+        
+        // Reset the conversation history in OpenAI service to ensure proper formatting
+        openAIService.resetConversation();
+        console.log('Conversation history reset due to structured output setting change');
+        
+        // Reset current recommendations if any to encourage getting fresh ones with the new format
+        if (this.recommendations.length > 0) {
+          this.recommendations = [];
+          this.recommendationsRequested = false;
+          console.log('Cleared current recommendations due to structured output setting change');
+        }
+      } catch (error) {
+        console.error('Error saving structured output preference to server:', error);
+        // Fallback to localStorage only
+        localStorage.setItem('useStructuredOutput', this.useStructuredOutput.toString());
+        openAIService.useStructuredOutput = this.useStructuredOutput;
+        
+        // Still reset the conversation even if there was an error saving
+        openAIService.resetConversation();
       }
     },
     
@@ -3818,9 +3824,16 @@ export default {
         
         if (settings.librarySampleSize !== undefined) {
           const sampleSize = parseInt(settings.librarySampleSize, 10);
-          if (!isNaN(sampleSize) && sampleSize >= 5 && sampleSize <= 50) {
+          if (!isNaN(sampleSize) && sampleSize >= 5 && sampleSize <= 1000) {
             this.sampleSize = sampleSize;
           }
+        }
+        
+        // Structured output setting
+        if (settings.useStructuredOutput !== undefined) {
+          this.useStructuredOutput = settings.useStructuredOutput === true || settings.useStructuredOutput === 'true';
+          // Also set it in the OpenAIService
+          openAIService.useStructuredOutput = this.useStructuredOutput;
         }
         
         // Plex settings
@@ -4007,6 +4020,15 @@ export default {
           console.log('Setting numRecommendations from localStorage:', this.numRecommendations);
         }
       }
+    }
+    
+    // Check for structured output setting in localStorage if we didn't get it from server
+    const savedStructuredOutput = localStorage.getItem('useStructuredOutput');
+    if (savedStructuredOutput !== null) {
+      const useStructured = savedStructuredOutput === 'true';
+      this.useStructuredOutput = useStructured;
+      openAIService.useStructuredOutput = useStructured;
+      console.log('Setting useStructuredOutput from localStorage:', useStructured);
     }
     
     if (this.columnsCount === 2) { // 2 is the default - if it's still default, check localStorage
@@ -5641,31 +5663,17 @@ select:focus {
 
 .rating-score {
   font-weight: bold;
-  font-size: 15px;
+  font-size: 16px;
   display: inline-flex;
   align-items: center;
   color: #2196F3;
-  padding: 4px 10px 4px 8px;
+  padding: 4px 12px;
   border-radius: 4px;
   width: fit-content;
   line-height: 1;
   margin-top: 4px;
   vertical-align: middle;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.rating-details {
-  font-size: 13px;
-  margin-top: 6px;
-  color: var(--text-color);
-  line-height: 1.4;
-  opacity: 0.85;
-  padding-left: 2px;
-}
-
-.rating-score {
-  padding: 4px 12px;
-  font-size: 16px;
 }
 
 .score-fresh {
@@ -6291,5 +6299,24 @@ select:focus {
   outline: none;
   border-color: #34A853;
   box-shadow: 0 0 0 2px rgba(52, 168, 83, 0.2);
+}
+
+.experimental-toggle {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border-color);
+}
+
+.experimental-badge {
+  display: inline-block;
+  background-color: #ff9800;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 </style>
