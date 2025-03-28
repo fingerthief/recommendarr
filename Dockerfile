@@ -25,6 +25,8 @@ RUN npm run build
 # Final stage
 FROM node:22-alpine
 
+USER root
+
 RUN apk add --no-cache catatonit
 
 WORKDIR /app
