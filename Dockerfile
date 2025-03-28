@@ -24,6 +24,9 @@ RUN npm run build
 
 # Final stage
 FROM node:22-alpine
+
+RUN apk add --no-cache catatonit
+
 WORKDIR /app
 
 # Copy package files and install production dependencies
@@ -49,5 +52,4 @@ RUN apk add --no-cache dos2unix && dos2unix /start-unified.sh && chmod +x /start
 # Expose port
 EXPOSE 3000
 
-# Start unified server
-CMD ["sh", "/start-unified.sh"]
+ENTRYPOINT ["/usr/bin/catatonit", "--", "node", "server/server.js"]
