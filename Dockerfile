@@ -35,10 +35,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --production
 
-# Copy server files
-COPY server ./server
-
-# Copy built frontend from build stage
+COPY --from=build-stage /app/node_modules ./node_modules
 COPY --from=build-stage /app/dist ./dist
 
 COPY server ./server
