@@ -2,17 +2,23 @@
 FROM node:22-alpine AS build-stage
 
 WORKDIR /app
-COPY package*.json ./
+
+COPY \
+    package*.json \
+    vue.config.js \
+    babel.config.js \
+    jsconfig.json \
+    nginx.conf \
+    ./
+
 RUN npm install
-COPY . .
 
-# Add build arguments that can be passed during build time
-ARG VUE_APP_API_URL
-ARG BASE_URL
+COPY src ./src
+COPY public ./public
 
-# Set as environment variables for the build process
-ENV VUE_APP_API_URL=${VUE_APP_API_URL}
-ENV BASE_URL=${BASE_URL}
+# Not sure if needed (please review)
+# ENV VUE_APP_API_URL=
+# ENV BASE_URL=
 
 RUN npm run build
 
