@@ -41,7 +41,8 @@ COPY server ./server
 # Copy built frontend from build stage
 COPY --from=build-stage /app/dist ./dist
 
-# Set environment variables
+COPY server ./server
+
 ENV DOCKER_ENV=false
 ENV PORT=3000
 # We no longer need a separate API URL - it's always /api
