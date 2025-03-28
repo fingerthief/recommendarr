@@ -55,4 +55,6 @@ RUN apk add --no-cache dos2unix && dos2unix /start-unified.sh && chmod +x /start
 # Expose port
 EXPOSE 3000
 
+USER nobody:nogroup
+
 ENTRYPOINT ["/usr/bin/catatonit", "--", "node", "server/server.js"]
