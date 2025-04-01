@@ -1,29 +1,29 @@
 <template>
-  <div v-if="!error && recommendations.length > 0" class="recommendation-list" :style="gridStyle">
-    <div v-for="(rec, index) in recommendations" :key="index" class="recommendation-card" :class="{ 'compact-mode': shouldUseCompactMode, 'expanded': expandedCards.has(index) }">
+  <div v-if="!store.state.error && store.state.recommendations.length > 0" class="recommendation-list" :style="gridStyle">
+    <div v-for="(rec, index) in store.state.recommendations" :key="index" class="recommendation-card" :class="{ 'compact-mode': shouldUseCompactMode, 'expanded': store.state.expandedCards.has(index) }">
       <!-- Whole card content is clickable for TMDB -->
       <div class="card-content" 
-        @click="openTMDBDetailModal(rec)" 
-        :class="{ 'clickable': isTMDBAvailable, 'compact-layout': shouldUseCompactMode, 'horizontal-layout': !shouldUseCompactMode }"
-        :title="isTMDBAvailable ? 'Click for more details' : ''"
+        @click="store.openTMDBDetailModal(rec)" 
+        :class="{ 'clickable': store.state.tmdbAvailable, 'compact-layout': shouldUseCompactMode, 'horizontal-layout': !shouldUseCompactMode }"
+        :title="store.state.tmdbAvailable ? 'Click for more details' : ''"
       >
         <!-- Poster container -->
         <div class="poster-container" :class="{ 'poster-left': !shouldUseCompactMode }">
           <div 
             class="poster" 
-            :style="getPosterStyle(rec.title)"
-            @click.stop="openTMDBDetailModal(rec)"
-            :class="{ 'clickable-poster': isTMDBAvailable }"
+            :style="store.getPosterStyle(rec.title)"
+            @click.stop="store.openTMDBDetailModal(rec)"
+            :class="{ 'clickable-poster': store.state.tmdbAvailable }"
           >
-            <div v-if="!hasPoster(rec.title)" class="title-fallback" @click.stop="openTMDBDetailModal(rec)">
-              {{ getInitials(rec.title) }}
+            <div v-if="!store.hasPoster(rec.title)" class="title-fallback" @click.stop="store.openTMDBDetailModal(rec)">
+              {{ store.getInitials(rec.title) }}
             </div>
             
             <button 
-              v-if="isPosterFallback(rec.title)" 
+              v-if="store.isPosterFallback(rec.title)" 
               class="retry-poster-button" 
-              :class="{ 'loading': loadingPosters.get(cleanTitle(rec.title)) }"
-              @click.stop.prevent="retryPoster(rec.title)"
+              :class="{ 'loading': store.state.loadingPosters.get(store.cleanTitle(rec.title)) }"
+              @click.stop.prevent="store.retryPoster(rec.title)"
               title="Retry loading poster"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
@@ -42,18 +42,18 @@
             <div class="card-actions">
               <div class="like-dislike-buttons">
                 <button 
-                  @click.stop="likeRecommendation(rec.title)" 
+                  @click.stop="store.likeRecommendation(rec.title)" 
                   class="action-btn like-btn"
-                  :class="{'active': isLiked(rec.title)}"
+                  :class="{'active': store.isLiked(rec.title)}"
                   title="Like this recommendation">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
                   </svg>
                 </button>
                 <button 
-                  @click.stop="dislikeRecommendation(rec.title)" 
+                  @click.stop="store.dislikeRecommendation(rec.title)" 
                   class="action-btn dislike-btn"
-                  :class="{'active': isDisliked(rec.title)}"
+                  :class="{'active': store.isDisliked(rec.title)}"
                   title="Dislike this recommendation">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm10-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"></path>
@@ -61,15 +61,15 @@
                 </button>
               </div>
               <button 
-                @click.stop="requestSeries(rec.title)" 
+                @click.stop="store.requestSeries(rec.title)" 
                 class="request-button"
-                :class="{'loading': requestingSeries === rec.title, 'requested': requestStatus[rec.title]?.success}"
-                :disabled="requestingSeries || requestStatus[rec.title]?.success"
-                :title="isMovieMode ? 'Add to Radarr' : 'Add to Sonarr'">
-                <span v-if="requestingSeries === rec.title">
+                :class="{'loading': store.state.requestingSeries === rec.title, 'requested': store.state.requestStatus[rec.title]?.success}"
+                :disabled="store.state.requestingSeries || store.state.requestStatus[rec.title]?.success"
+                :title="store.state.isMovieMode ? 'Add to Radarr' : 'Add to Sonarr'">
+                <span v-if="store.state.requestingSeries === rec.title">
                   <div class="small-spinner"></div>
                 </span>
-                <span v-else-if="requestStatus[rec.title]?.success">
+                <span v-else-if="store.state.requestStatus[rec.title]?.success">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
@@ -150,11 +150,11 @@
           <!-- Full-width expand button at bottom of card for compact mode -->
           <button v-if="shouldUseCompactMode" 
                   class="full-width-expand-button" 
-                  @click.stop="toggleCardExpansion(index)"
-                  :title="expandedCards.has(index) ? 'Hide details' : 'Show more details'"
-                  :class="{ 'expanded': expandedCards.has(index) }">
-            <span>{{ expandedCards.has(index) ? 'Show Less' : 'Show More' }}</span>
-            <svg v-if="!expandedCards.has(index)" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  @click.stop="store.toggleCardExpansion(index)"
+                  :title="store.state.expandedCards.has(index) ? 'Hide details' : 'Show more details'"
+                  :class="{ 'expanded': store.state.expandedCards.has(index) }">
+            <span>{{ store.state.expandedCards.has(index) ? 'Show Less' : 'Show More' }}</span>
+            <svg v-if="!store.state.expandedCards.has(index)" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="7 13 12 18 17 13"></polyline>
             </svg>
             <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -168,101 +168,17 @@
 </template>
 
 <script>
-import imageService from '../services/ImageService';
+import RecommendationsStore from '../stores/RecommendationsStore';
 
 export default {
   name: 'RecommendationResults',
-  props: {
-    recommendations: {
-      type: Array,
-      required: true,
-      default: () => []
-    },
-    error: {
-      type: Object,
-      default: null
-    },
-    requestStatus: {
-      type: Object,
-      required: true,
-      default: () => ({})
-    },
-    requestingSeries: {
-      type: String,
-      default: null
-    },
-    isMovieMode: {
-      type: Boolean,
-      required: true
-    },
-    likedRecommendations: {
-      type: Array,
-      required: true,
-      default: () => []
-    },
-    dislikedRecommendations: {
-      type: Array,
-      required: true,
-      default: () => []
-    },
-    columnsCount: {
-      type: Number,
-      default: 2
-    }
-  },
-  watch: {
-    // Watch for changes to recommendations to update posters
-    recommendations: {
-      handler(newRecommendations) {
-        // If we have recommendations and their length changed, fetch all posters
-        if (newRecommendations.length > 0) {
-          // Check if we need to fetch new posters
-          const needsFetch = newRecommendations.some(rec => {
-            const cleanTitle = this.cleanTitle(rec.title);
-            return !this.posters.has(cleanTitle);
-          });
-          
-          if (needsFetch) {
-            this.fetchPosters();
-          }
-        }
-      },
-      immediate: false
-    },
-    // If movie mode changes, we need to reset and reload all posters
-    isMovieMode: {
-      handler() {
-        // Clear all posters and states
-        this.posters.clear();
-        this.loadingPosters.clear();
-        this.expandedCards.clear();
-        
-        // Reload posters for all current recommendations
-        if (this.recommendations.length > 0) {
-          this.fetchPosters();
-        }
-        
-        // Also recheck TMDB availability as it might be different for movies vs TV
-        this.checkTMDBAvailability();
-      }
-    },
-    // Watch for changes to columnsCount
-    columnsCount: {
-      handler(newValue) {
-        console.log('Columns count changed to:', newValue);
-        // Force update to recalculate layout
-        this.$forceUpdate();
-      }
-    }
-  },
-  data() {
+  
+  setup() {
     return {
-      expandedCards: new Set(), // Track which cards are in expanded view
-      loadingPosters: new Map(), // Track which posters are being loaded
-      posters: new Map(), // Using a reactive Map for poster URLs
-      tmdbAvailable: false // Track TMDB availability
+      store: RecommendationsStore
     };
   },
+  
   computed: {
     shouldUseCompactMode() {
       // Calculate available width per card based on screen width and columns
@@ -275,9 +191,7 @@ export default {
       // 450px is a good threshold where horizontal layout starts to look cramped
       return availableWidthPerCard < 450;
     },
-    isTMDBAvailable() {
-      return this.tmdbAvailable;
-    },
+    
     gridStyle() {
       const numColumns = this.getNumColumns();
       const gap = window.innerWidth < 600 ? '20px' : '30px';
@@ -288,96 +202,18 @@ export default {
       };
     }
   },
+  
   methods: {
     getNumColumns() {
       const screenWidth = window.innerWidth;
       
-      // Use the parent's columnsCount but be responsive on small screens
+      // Use responsive columns on small screens
       if (screenWidth < 600) return 1;
       
-      // On larger screens, respect the parent's columnsCount setting
-      return this.columnsCount;
+      // On larger screens, respect the store's columnsCount setting
+      return this.store.state.columnsCount;
     },
-    // Toggle card expansion in compact mode
-    toggleCardExpansion(index) {
-      if (this.expandedCards.has(index)) {
-        this.expandedCards.delete(index);
-      } else {
-        this.expandedCards.add(index);
-      }
-    },
-    // Clean title for consistent poster lookup
-    cleanTitle(title) {
-      return title.replace(/[:.!?]+$/, '').trim();
-    },
-    // Check if we have a poster for this title
-    hasPoster(title) {
-      const clean = this.cleanTitle(title);
-      return this.posters.has(clean);
-    },
-    // Check if poster is a fallback and should have retry button
-    isPosterFallback(title) {
-      const clean = this.cleanTitle(title);
-      const posterUrl = this.posters.get(clean);
-      return posterUrl && posterUrl.includes('fallback');
-    },
-    // Retry loading a poster for a specific title
-    async retryPoster(title) {
-      const clean = this.cleanTitle(title);
-      
-      // Set loading state
-      this.loadingPosters.set(clean, true);
-      
-      try {
-        // Try to get a real poster
-        const posterUrl = this.isMovieMode
-          ? await imageService.getPosterForMovie(clean)
-          : await imageService.getPosterForShow(clean);
-        
-        if (posterUrl) {
-          this.posters.set(clean, posterUrl);
-        }
-      } catch (error) {
-        console.error('Error retrying poster:', error);
-      } finally {
-        // Clear loading state
-        this.loadingPosters.set(clean, false);
-      }
-    },
-    // Get poster style for CSS
-    getPosterStyle(title) {
-      const clean = this.cleanTitle(title);
-      const posterUrl = this.posters.get(clean);
-      
-      if (posterUrl) {
-        return {
-          'background-image': `url(${posterUrl})`,
-          'background-size': 'cover',
-          'background-position': 'center'
-        };
-      }
-      
-      return {
-        'background-color': 'var(--card-bg-color)'
-      };
-    },
-    // New method to get rating meter style
-    getRatingStyle(ratingText) {
-      const score = parseInt(this.extractScore(ratingText), 10);
-      return {
-        width: `${score}%`
-      };
-    },
-    // Get initials for fallback display
-    getInitials(title) {
-      if (!title) return '';
-      
-      return title
-        .split(/\s+/)
-        .map(word => word.charAt(0).toUpperCase())
-        .slice(0, 2)
-        .join('');
-    },
+    
     // Extract just the numeric score from the rating text
     extractScore(ratingText) {
       if (!ratingText || ratingText === 'N/A') {
@@ -400,6 +236,7 @@ export default {
       // If no pattern matches, return 0
       return '0';
     },
+    
     // Determine CSS class for Recommendarr Rating
     getScoreClass(scoreText) {
       if (!scoreText || scoreText === 'N/A') {
@@ -414,142 +251,73 @@ export default {
       if (score >= 60) return 'score-medium';
       return 'score-low';
     },
-    // Like a TV show recommendation
-    async likeRecommendation(title) {
-      // If it's already liked, remove it from liked list (toggle behavior)
-      if (this.isLiked(title)) {
-        this.$emit('update:likedRecommendations', title);
-        return;
-      }
-      
-      // Remove from disliked list if it was there
-      if (this.isDisliked(title)) {
-        this.$emit('update:dislikedRecommendations', title);
-      }
-      
-      // Add to liked list
-      this.$emit('update:likedRecommendations', title);
-    },
-    // Dislike a TV show recommendation
-    async dislikeRecommendation(title) {
-      // If it's already disliked, remove it from disliked list (toggle behavior)
-      if (this.isDisliked(title)) {
-        this.$emit('update:dislikedRecommendations', title);
-        return;
-      }
-      
-      // Remove from liked list if it was there
-      if (this.isLiked(title)) {
-        this.$emit('update:likedRecommendations', title);
-      }
-      
-      // Add to disliked list
-      this.$emit('update:dislikedRecommendations', title);
-    },
-    // Check if a TV show is liked
-    isLiked(title) {
-      return this.likedRecommendations.includes(title);
-    },
-    // Check if a TV show is disliked
-    isDisliked(title) {
-      return this.dislikedRecommendations.includes(title);
-    },
-    // Open TMDB detail modal
-    openTMDBDetailModal(recommendation) {
-      if (!this.isTMDBAvailable) {
-        console.log('TMDB not available - skipping modal open');
-        return;
-      }
-      console.log('RecommendationResults: Opening TMDB modal for:', recommendation.title);
-      // Make sure we emit the entire recommendation object
-      this.$emit('open-tmdb-modal', recommendation);
-    },
-    
-    // The handlePosterClick method was removed since the entire card is now using a single click handler
-    // Request series
-    requestSeries(title) {
-      this.$emit('request-series', title);
-    },
-    async checkTMDBAvailability() {
-      try {
-        console.log('Checking TMDB availability...');
-        // Direct check assuming the imageService has this method
-        const isAvailable = await imageService.isTMDBAvailable();
-        console.log('TMDB availability result:', isAvailable);
-        this.tmdbAvailable = !!isAvailable;
-      } catch (error) {
-        console.error('Error checking TMDB availability:', error);
-        this.tmdbAvailable = false;
-      }
-      console.log('TMDB availability set to:', this.tmdbAvailable);
-    },
-    
-    // Poster click is now handled directly in the template with @click.stop directive
     
     handleWindowResize() {
       // This triggers a reactivity update for the shouldUseCompactMode computed property
       this.$forceUpdate();
       
-      // Force a re-computation of computed properties affected by screen size:
-      // - gridStyle for layout
-      // - shouldUseCompactMode for card display mode
-      // This ensures both the layout and card presentation adapt properly to changes
-      
       // Log current status to help with troubleshooting
       const isCompact = this.shouldUseCompactMode;
       const columns = this.getNumColumns();
       console.log(`Window resize: Compact mode ${isCompact ? 'active' : 'inactive'}, Columns: ${columns}`);
-    },
-    
-    // Method to fetch posters for all recommendations
-    async fetchPosters() {
-      // Clear existing loading states
-      this.loadingPosters.clear();
-      
-      // Create requests for all recommendations
-      const posterPromises = this.recommendations.map(async (rec) => {
-        try {
-          // Extract clean title (removing any punctuation at the end)
-          const cleanTitle = this.cleanTitle(rec.title);
-          
-          // Use the appropriate poster fetching method based on content type
-          const posterUrl = this.isMovieMode 
-            ? await imageService.getPosterForMovie(cleanTitle)
-            : await imageService.getPosterForShow(cleanTitle);
-          
-          if (posterUrl) {
-            // Update posters state using Map methods
-            this.posters.set(cleanTitle, posterUrl);
-          } else {
-            // Set fallback image
-            this.posters.set(cleanTitle, imageService.getFallbackImageUrl(cleanTitle));
-          }
-        } catch (error) {
-          console.error(`Error fetching poster for "${rec.title}":`, error);
-          // Fallback image
-          this.posters.set(rec.title, imageService.getFallbackImageUrl(rec.title));
-        }
-      });
-      
-      // Wait for all requests to complete
-      await Promise.all(posterPromises);
     }
   },
+  
   mounted() {
     // Check TMDB availability
-    this.checkTMDBAvailability();
+    this.store.checkTMDBAvailability();
     
     // Initialize posters for all recommendations
-    if (this.recommendations.length > 0) {
-      this.fetchPosters();
+    if (this.store.state.recommendations.length > 0) {
+      this.store.fetchPosters();
     }
     
     // Add window resize listener
     window.addEventListener('resize', this.handleWindowResize);
   },
+  
   beforeUnmount() {
     // Remove window resize listener
     window.removeEventListener('resize', this.handleWindowResize);
+  },
+  
+  watch: {
+    // Watch for changes to recommendations to update posters
+    'store.state.recommendations': {
+      handler(newRecommendations) {
+        // If we have recommendations and their length changed, fetch all posters
+        if (newRecommendations.length > 0) {
+          // Check if we need to fetch new posters
+          const needsFetch = newRecommendations.some(rec => {
+            const cleanTitle = this.store.cleanTitle(rec.title);
+            return !this.store.state.posters.has(cleanTitle);
+          });
+          
+          if (needsFetch) {
+            this.store.fetchPosters();
+          }
+        }
+      },
+      immediate: false
+    },
+    
+    // If movie mode changes, we need to reset and reload all posters
+    'store.state.isMovieMode': {
+      handler() {
+        // Clear all posters and states
+        this.store.state.posters.clear();
+        this.store.state.loadingPosters.clear();
+        this.store.state.expandedCards.clear();
+        
+        // Reload posters for all current recommendations
+        if (this.store.state.recommendations.length > 0) {
+          this.store.fetchPosters();
+        }
+        
+        // Also recheck TMDB availability as it might be different for movies vs TV
+        this.store.checkTMDBAvailability();
+      }
+    }
   }
 };
 </script>
