@@ -239,7 +239,10 @@ app.get('/api/auth/providers', (req, res) => {
 
 // OAuth routes
 // Google OAuth routes
-app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/api/auth/google', passport.authenticate('google', { 
+  scope: ['profile', 'email'],
+  state: true
+}));
 app.get('/api/auth/google/callback', 
   passport.authenticate('google', { failureRedirect: '/login?error=auth-failed' }),
   (req, res) => {
@@ -299,7 +302,10 @@ app.get('/api/auth/google/callback',
 );
 
 // GitHub OAuth routes
-app.get('/api/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
+app.get('/api/auth/github', passport.authenticate('github', { 
+  scope: ['user:email'],
+  state: true
+}));
 app.get('/api/auth/github/callback', 
   passport.authenticate('github', { failureRedirect: '/login?error=auth-failed' }),
   (req, res) => {
@@ -364,7 +370,11 @@ app.get('/api/auth/custom', (req, res, next) => {
   const scopeString = process.env.CUSTOM_OAUTH_SCOPE || 'openid profile email';
   const scope = scopeString.split(' ');
   
-  passport.authenticate('custom', { scope: scope })(req, res, next);
+  // Explicitly pass state: true to ensure state parameter is used
+  passport.authenticate('custom', { 
+    scope: scope,
+    state: true
+  })(req, res, next);
 });
 
 app.get('/api/auth/custom/callback', 
@@ -562,25 +572,22 @@ app.post('/api/auth/logout', (req, res) => {
     const authToken = cookieToken || headerToken;
     
     // Get user info before deleting session (for logging)
-    let userId = 'unknown';
     if (req.user) {
-      userId = req.user.userId;
-      
+      console.log(`Logging out user: ${req.user.userId}`);
     }
     
     // Delete the session from the database if a token exists
     if (authToken) {
       
-      const deleted = sessionManager.deleteSession(authToken);
-      
+      // Delete the current session
+      sessionManager.deleteSession(authToken);
       
       // Delete all sessions for this user to ensure complete logout
       if (req.user && req.user.userId) {
-        const sessionsDeleted = sessionManager.deleteUserSessions(req.user.userId);
-        
+        sessionManager.deleteUserSessions(req.user.userId);
       }
     } else {
-      
+      console.log('No auth token found during logout');
     }
     
     // Determine if we should use secure cookies based on the request's protocol or a config flag
@@ -811,13 +818,12 @@ app.delete('/api/auth/users/:userId', async (req, res) => {
       await userDataManager.deleteUserData(userId);
       
       // Delete user's sessions
-      const deletedSessions = sessionManager.deleteUserSessions(userId);
-      
+      sessionManager.deleteUserSessions(userId);
       
       res.json({ success: true, message: result.message });
-    } else {
-      res.status(400).json({ error: result.message });
-    }
+  } else {
+    console.log('Non-admin user refreshing Sonarr library for all users');
+  }
   } catch (error) {
     console.error('Delete user error:', error);
     res.status(500).json({ error: 'An error occurred while deleting user' });
@@ -1128,9 +1134,9 @@ app.post('/api/recommendations/:type', async (req, res) => {
       if (userData.movieRecommendationsDetails) {
         delete userData.movieRecommendationsDetails;
       }
-    } else {
-      return res.status(400).json({ error: 'Invalid recommendation type' });
-    }
+  } else {
+    console.log('Non-admin user refreshing Radarr library for all users');
+  }
     
     // Save the updated user data
     
@@ -1396,7 +1402,7 @@ app.post('/api/settings/:settingName', async (req, res) => {
         processedValue = JSON.parse(rawValue);
         
       } catch (e) {
-        
+        console.error(e);
       }
     } 
     

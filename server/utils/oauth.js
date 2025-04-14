@@ -56,7 +56,7 @@ exports.setupPassport = (app) => {
     
     
   } else {
-    
+    // Google OAuth not configured, skipping setup
   }
   
   // Set up GitHub OAuth if credentials exist
@@ -81,7 +81,7 @@ exports.setupPassport = (app) => {
     
     
   } else {
-    
+    // GitHub OAuth not configured, skipping setup
   }
   
   // Set up Custom OAuth2 if credentials exist
@@ -96,6 +96,12 @@ exports.setupPassport = (app) => {
     const scopeString = process.env.CUSTOM_OAUTH_SCOPE || 'openid profile email';
     const scope = scopeString.split(' ');
     
+    // Generate a secure state parameter with sufficient entropy
+    const generateState = function() {
+      // Generate a random string with 16 characters (more than the 8 required)
+      return require('crypto').randomBytes(16).toString('hex');
+    };
+    
     // Configure Custom OAuth2 strategy
     const customOAuthStrategy = new OAuth2Strategy({
       authorizationURL: process.env.CUSTOM_OAUTH_AUTH_URL,
@@ -103,7 +109,35 @@ exports.setupPassport = (app) => {
       clientID: process.env.CUSTOM_OAUTH_CLIENT_ID,
       clientSecret: process.env.CUSTOM_OAUTH_CLIENT_SECRET,
       callbackURL: '/api/auth/custom/callback',
-      scope: scope
+      scope: scope,
+      state: true,  // Explicitly enable state parameter
+      stateStore: {
+        store: function(req, state, callback) {
+          // Store state in session
+          if (!req.session.authStates) {
+            req.session.authStates = {};
+          }
+          req.session.authStates[state] = Date.now();
+          callback(null, state);
+        },
+        verify: function(req, state, callback) {
+          // Verify state from session
+          if (!req.session.authStates || !req.session.authStates[state]) {
+            return callback(new Error('Invalid state parameter'), false);
+          }
+          
+          // Check if state is expired (older than 10 minutes)
+          const stateTime = req.session.authStates[state];
+          if (Date.now() - stateTime > 10 * 60 * 1000) {
+            delete req.session.authStates[state];
+            return callback(new Error('State parameter expired'), false);
+          }
+          
+          // Clean up
+          delete req.session.authStates[state];
+          return callback(null, true);
+        }
+      }
     }, async (accessToken, refreshToken, params, profile, done) => {
       try {
         
@@ -161,11 +195,13 @@ exports.setupPassport = (app) => {
       });
     };
     
+    // Set the custom state generator
+    customOAuthStrategy.generateState = generateState;
+    
     passport.use('custom', customOAuthStrategy);
     
-    
   } else {
-    
+    // Custom OAuth not configured, skipping setup
   }
   
   // Function to validate if OAuth providers are configured

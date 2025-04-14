@@ -31,6 +31,7 @@ services:
       # SESSION_SECRET is REQUIRED for OAuth to work securely
       # Generate a secure random string (minimum 32 chars):
       #   Linux/macOS: openssl rand -hex 32
+      # This is critical for secure state parameter handling in OAuth flows
       #- SESSION_SECRET=your-generated-secret-here
       
       # Google OAuth Setup:
