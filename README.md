@@ -55,7 +55,8 @@ After installation, you'll need to connect your media services and set up an AI 
 
 - **[Connecting Services](https://github.com/fingerthief/recommendarr/wiki/Connecting-Services)**: Connect Sonarr, Radarr, Plex, Jellyfin, Tautulli, Trakt.
 - **[AI Service Setup](https://github.com/fingerthief/recommendarr/wiki/AI-Service-Setup)**: Configure OpenAI, Ollama, LM Studio, or other compatible services.
-- **[Authentication Setup](https://github.com/fingerthief/recommendarr/wiki/Authentication-Setup) (Optional)**: Set up OAuth login with Google, GitHub, etc.
+- **[Authentication Setup](https://github.com/fingerthief/recommendarr/wiki/Authentication-Setup) (Optional)**: Set up OAuth login with Google, GitHub, etc. 
+  - **Important**: When using OAuth, ensure you set a strong `SESSION_SECRET` in your .env file for secure state parameter handling.
 - **[Usage](https://github.com/fingerthief/recommendarr/wiki/Usage)**: Learn how to generate recommendations.
 
 ## 🌐 Advanced Setup
