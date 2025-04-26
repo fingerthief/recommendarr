@@ -1,44 +1,38 @@
-# Build stage
 FROM node:22-alpine AS build-stage
 
 WORKDIR /app
 
+COPY package*.json ./
+RUN npm ci
+
 COPY \
-    package*.json \
     vue.config.js \
     babel.config.js \
     jsconfig.json \
     nginx.conf \
     ./
 
-RUN npm install
-
 COPY src ./src
+COPY server ./server
 COPY public ./public
-
-# Not sure if needed (please review)
-# ENV VUE_APP_API_URL=
-# ENV BASE_URL=
 
 RUN npm run build
 
-FROM node:22-alpine
+FROM node:22-alpine AS prod-stage
 
 USER root
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
 
 RUN apk add --no-cache catatonit
 
-WORKDIR /app
-
-COPY package*.json ./
-
-COPY --from=build-stage /app/node_modules ./node_modules
 COPY --from=build-stage /app/dist ./dist
+COPY --from=build-stage /app/server ./server
+COPY --from=build-stage /app/package*.json ./
 
-COPY server ./server
-
-ENV DOCKER_ENV=false
-ENV PORT=3000
+RUN npm ci
 
 EXPOSE 3000
 
